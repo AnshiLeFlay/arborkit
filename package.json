@@ -1,0 +1,17 @@
+{
+  "name": "arbor",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "engines": { "node": ">=20.6" },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}
