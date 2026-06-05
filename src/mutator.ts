@@ -115,4 +115,48 @@ export class Mutator {
       ts: this.deps.clock.now(),
     });
   }
+
+  move(ref: Ref, toParentRef: Ref, keyOrIndex: string | number, opts: MutateOpts = {}): void {
+    const node = this.resolve(ref);
+    if (node.parentId === null) throw new InvalidOpError("cannot move the root");
+    const toParent = this.resolve(toParentRef);
+    this.checkScope(node, opts.writeScope);
+    this.checkScope(toParent, opts.writeScope);
+    this.checkVersion(node, opts.ifVersion);
+    const oldParentId = node.parentId;
+    const from = { parentId: node.parentId, key: node.key };
+    this.tree.moveNode(node.id, toParent.id, keyOrIndex);
+    // bump moved node + both parents (dedupe if old === new parent)
+    const bumped = new Set<NodeId>();
+    for (const id of [node.id, oldParentId, toParent.id]) {
+      if (id !== null && !bumped.has(id)) {
+        const n = this.tree.get(id);
+        if (n) this.bump(n, opts.owner);
+        bumped.add(id);
+      }
+    }
+    this.log.append({
+      kind: "move",
+      targetId: node.id,
+      parentId: toParent.id,
+      key: node.key,
+      from,
+      to: { parentId: toParent.id, key: node.key },
+      actor: opts.owner,
+      ts: this.deps.clock.now(),
+    });
+  }
+
+  /** Run `fn` atomically: if it throws, the tree and log are restored to their pre-transaction state. */
+  transaction(fn: () => void): void {
+    const snap = this.tree.snapshot();
+    const logLen = this.log.length();
+    try {
+      fn();
+    } catch (err) {
+      this.tree.restore(snap);
+      this.log.truncateTo(logLen);
+      throw err;
+    }
+  }
 }
