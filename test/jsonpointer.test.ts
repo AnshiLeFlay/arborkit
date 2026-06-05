@@ -9,6 +9,14 @@ describe("json pointer segments", () => {
   it("unescapes ~1 to / and ~0 to ~ on decode", () => {
     expect(decodeSegment("a~1b~0c")).toBe("a/b~c");
   });
+
+  it("encodes a literal ~1 segment unambiguously as ~01", () => {
+    expect(encodeSegment("~1")).toBe("~01");
+  });
+
+  it("decodes ~01 back to the literal ~1", () => {
+    expect(decodeSegment("~01")).toBe("~1");
+  });
 });
 
 describe("buildPointer / parsePointer", () => {
@@ -34,5 +42,9 @@ describe("buildPointer / parsePointer", () => {
 
   it("throws on a non-root pointer that does not start with '/'", () => {
     expect(() => parsePointer("pages/0")).toThrow();
+  });
+
+  it("parses a pointer containing escaped characters directly", () => {
+    expect(parsePointer("/a~1b/~0x")).toEqual(["a/b", "~x"]);
   });
 });
