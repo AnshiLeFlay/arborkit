@@ -36,6 +36,11 @@ describe("ArtifactTree.replaceValue", () => {
     expect(tree.size()).toBeLessThan(sizeBefore);
     expect(tree.toJson()).toEqual({ a: 0 });
   });
+
+  it("throws when the node id is unknown", () => {
+    const tree = makeTree({ a: 1 });
+    expect(() => tree.replaceValue("does-not-exist", 5)).toThrow();
+  });
 });
 
 describe("ArtifactTree.snapshot / restore", () => {
@@ -115,5 +120,12 @@ describe("ArtifactTree.moveNode", () => {
     expect(tree.toJson()).toEqual({ from: ["b"], to: ["c", "a"] });
     expect(tree.children(fromId).map((c) => c.key)).toEqual([0]);
     expect(tree.children(toId).map((c) => c.key)).toEqual([0, 1]);
+  });
+
+  it("throws when the move target is a leaf", () => {
+    const tree = makeTree({ a: 1, b: 2 });
+    const aId = tree.children(tree.rootIdValue()).find((c) => c.key === "a")!.id;
+    const bId = tree.children(tree.rootIdValue()).find((c) => c.key === "b")!.id;
+    expect(() => tree.moveNode(aId, bId, "x")).toThrow();
   });
 });
