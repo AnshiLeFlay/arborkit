@@ -43,3 +43,12 @@ export class InvalidOpError extends ArborError {
     super("INVALID_OP", message);
   }
 }
+
+export class ValidationError extends ArborError {
+  constructor(
+    public readonly type: string | undefined,
+    public readonly details: string,
+  ) {
+    super("VALIDATION_ERROR", `Validation failed${type ? ` for type ${type}` : ""}: ${details}`);
+  }
+}
