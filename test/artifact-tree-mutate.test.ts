@@ -58,3 +58,62 @@ describe("ArtifactTree.snapshot / restore", () => {
     expect(tree.toJson()).toEqual({ n: 1 });
   });
 });
+
+describe("ArtifactTree.insertChild", () => {
+  it("inserts a new keyed child into an object", () => {
+    const tree = makeTree({ a: 1 });
+    tree.insertChild(tree.rootIdValue(), "b", 2);
+    expect(tree.toJson()).toEqual({ a: 1, b: 2 });
+  });
+
+  it("rejects inserting a duplicate object key", () => {
+    const tree = makeTree({ a: 1 });
+    expect(() => tree.insertChild(tree.rootIdValue(), "a", 9)).toThrow();
+  });
+
+  it("inserts into an array at an index and renumbers keys to match positions", () => {
+    const tree = makeTree({ arr: ["x", "z"] });
+    const arrId = tree.children(tree.rootIdValue())[0].id;
+    tree.insertChild(arrId, 1, "y"); // insert at index 1
+    expect(tree.toJson()).toEqual({ arr: ["x", "y", "z"] });
+    expect(tree.children(arrId).map((c) => c.key)).toEqual([0, 1, 2]);
+  });
+
+  it("rejects inserting into a leaf", () => {
+    const tree = makeTree({ a: 1 });
+    const aId = tree.children(tree.rootIdValue())[0].id;
+    expect(() => tree.insertChild(aId, "x", 1)).toThrow();
+  });
+});
+
+describe("ArtifactTree.removeChild", () => {
+  it("removes an object key", () => {
+    const tree = makeTree({ a: 1, b: 2 });
+    const bId = tree.children(tree.rootIdValue()).find((c) => c.key === "b")!.id;
+    tree.removeChild(tree.rootIdValue(), bId);
+    expect(tree.toJson()).toEqual({ a: 1 });
+  });
+
+  it("removes an array element and renumbers remaining keys", () => {
+    const tree = makeTree({ arr: ["x", "y", "z"] });
+    const arrId = tree.children(tree.rootIdValue())[0].id;
+    const yId = tree.children(arrId)[1].id;
+    tree.removeChild(arrId, yId);
+    expect(tree.toJson()).toEqual({ arr: ["x", "z"] });
+    expect(tree.children(arrId).map((c) => c.key)).toEqual([0, 1]);
+  });
+});
+
+describe("ArtifactTree.moveNode", () => {
+  it("re-parents a node, preserving its id, and renumbers affected arrays", () => {
+    const tree = makeTree({ from: ["a", "b"], to: ["c"] });
+    const fromId = tree.children(tree.rootIdValue()).find((c) => c.key === "from")!.id;
+    const toId = tree.children(tree.rootIdValue()).find((c) => c.key === "to")!.id;
+    const aId = tree.children(fromId)[0].id; // "a"
+    tree.moveNode(aId, toId, 1); // append "a" at index 1 of `to`
+    expect(tree.get(aId)!.id).toBe(aId); // identity preserved
+    expect(tree.toJson()).toEqual({ from: ["b"], to: ["c", "a"] });
+    expect(tree.children(fromId).map((c) => c.key)).toEqual([0]);
+    expect(tree.children(toId).map((c) => c.key)).toEqual([0, 1]);
+  });
+});

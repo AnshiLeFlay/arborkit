@@ -143,4 +143,93 @@ export class ArtifactTree {
     }
     this.rootId = snap.rootId;
   }
+
+  /** Insert a decomposed `value` as a child of `parentId`. For objects `keyOrIndex` is the string key; for arrays it is the insert index. Returns the new child's id. */
+  insertChild(parentId: NodeId, keyOrIndex: string | number, value: Json): NodeId {
+    const parent = this.nodes.get(parentId);
+    if (!parent) throw new InvalidOpError(`Unknown node: ${parentId}`);
+    if (parent.kind === "object") {
+      if (typeof keyOrIndex !== "string") {
+        throw new InvalidOpError("object insert requires a string key");
+      }
+      if (parent.childIds.some((cid) => this.nodes.get(cid)!.key === keyOrIndex)) {
+        throw new InvalidOpError(`key already exists: ${keyOrIndex}`);
+      }
+      const cid = this.build(value, parentId, keyOrIndex);
+      parent.childIds.push(cid);
+      return cid;
+    }
+    if (parent.kind === "array") {
+      if (typeof keyOrIndex !== "number") {
+        throw new InvalidOpError("array insert requires a numeric index");
+      }
+      const at = Math.max(0, Math.min(keyOrIndex, parent.childIds.length));
+      const cid = this.build(value, parentId, at);
+      parent.childIds.splice(at, 0, cid);
+      this.renumberArray(parentId);
+      return cid;
+    }
+    throw new InvalidOpError("cannot insert into a leaf node");
+  }
+
+  /** Remove `childId` (and its subtree) from `parentId`. Renumbers array siblings. */
+  removeChild(parentId: NodeId, childId: NodeId): void {
+    const parent = this.nodes.get(parentId);
+    if (!parent) throw new InvalidOpError(`Unknown node: ${parentId}`);
+    const idx = parent.childIds.indexOf(childId);
+    if (idx < 0) throw new InvalidOpError(`${childId} is not a child of ${parentId}`);
+    this.deleteDescendants(childId);
+    this.nodes.delete(childId);
+    parent.childIds.splice(idx, 1);
+    if (parent.kind === "array") this.renumberArray(parentId);
+  }
+
+  /** Move `id` under `newParentId` at `keyOrIndex`, preserving `id`. Renumbers affected arrays. */
+  moveNode(id: NodeId, newParentId: NodeId, keyOrIndex: string | number): void {
+    const node = this.nodes.get(id);
+    if (!node) throw new InvalidOpError(`Unknown node: ${id}`);
+    if (node.parentId === null) throw new InvalidOpError("cannot move the root");
+    const newParent = this.nodes.get(newParentId);
+    if (!newParent) throw new InvalidOpError(`Unknown node: ${newParentId}`);
+
+    // If moving into a leaf array, decompose it first
+    if (newParent.kind === "leaf" && Array.isArray(newParent.content)) {
+      const arrValue = newParent.content as Json[];
+      newParent.kind = "array";
+      newParent.content = null;
+      newParent.childIds = [];
+      for (let i = 0; i < arrValue.length; i++) {
+        const cid = this.build(arrValue[i], newParentId, i);
+        newParent.childIds.push(cid);
+      }
+    }
+
+    if (newParent.kind === "leaf") throw new InvalidOpError("cannot move into a leaf node");
+
+    const oldParent = this.nodes.get(node.parentId)!;
+    const oldIdx = oldParent.childIds.indexOf(id);
+    oldParent.childIds.splice(oldIdx, 1);
+    if (oldParent.kind === "array") this.renumberArray(oldParent.id);
+
+    if (newParent.kind === "object") {
+      if (typeof keyOrIndex !== "string") throw new InvalidOpError("object move requires a string key");
+      node.parentId = newParentId;
+      node.key = keyOrIndex;
+      newParent.childIds.push(id);
+    } else {
+      const at = typeof keyOrIndex === "number" ? Math.max(0, Math.min(keyOrIndex, newParent.childIds.length)) : newParent.childIds.length;
+      node.parentId = newParentId;
+      newParent.childIds.splice(at, 0, id);
+      this.renumberArray(newParentId);
+    }
+  }
+
+  /** Set each array child's `key` to its current position. */
+  private renumberArray(parentId: NodeId): void {
+    const parent = this.nodes.get(parentId);
+    if (!parent) return;
+    parent.childIds.forEach((cid, i) => {
+      this.nodes.get(cid)!.key = i;
+    });
+  }
 }
