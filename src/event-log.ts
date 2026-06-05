@@ -1,0 +1,52 @@
+import type { Json, NodeId } from "./types";
+
+export type OpKind = "set" | "insert" | "remove" | "move";
+
+/**
+ * A recorded mutation. Carries enough to reverse it later (M7 replay):
+ * - set:    before = old subtree value, after = new value
+ * - insert: after = inserted value (inverse is remove of targetId)
+ * - remove: before = removed subtree value (inverse is insert at parentId/key)
+ * - move:   from/to capture old and new (parentId, key)
+ */
+export interface MutationEvent {
+  seq: number;
+  kind: OpKind;
+  targetId: NodeId;
+  parentId: NodeId | null;
+  key: string | number | null;
+  before?: Json;
+  after?: Json;
+  from?: { parentId: NodeId | null; key: string | number | null };
+  to?: { parentId: NodeId | null; key: string | number | null };
+  actor?: string;
+  ts: number;
+}
+
+/** Append-only log of mutations with monotonic seq. */
+export class EventLog {
+  private readonly events: MutationEvent[] = [];
+
+  append(event: Omit<MutationEvent, "seq">): MutationEvent {
+    const full: MutationEvent = { ...event, seq: this.events.length };
+    this.events.push(full);
+    return full;
+  }
+
+  entries(): readonly MutationEvent[] {
+    return this.events;
+  }
+
+  since(seq: number): MutationEvent[] {
+    return this.events.filter((e) => e.seq >= seq);
+  }
+
+  length(): number {
+    return this.events.length;
+  }
+
+  /** Drop events past `length` — used to roll back a failed transaction. */
+  truncateTo(length: number): void {
+    this.events.length = length;
+  }
+}
