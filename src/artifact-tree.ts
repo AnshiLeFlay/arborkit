@@ -191,19 +191,6 @@ export class ArtifactTree {
     if (node.parentId === null) throw new InvalidOpError("cannot move the root");
     const newParent = this.nodes.get(newParentId);
     if (!newParent) throw new InvalidOpError(`Unknown node: ${newParentId}`);
-
-    // If moving into a leaf array, decompose it first
-    if (newParent.kind === "leaf" && Array.isArray(newParent.content)) {
-      const arrValue = newParent.content as Json[];
-      newParent.kind = "array";
-      newParent.content = null;
-      newParent.childIds = [];
-      for (let i = 0; i < arrValue.length; i++) {
-        const cid = this.build(arrValue[i], newParentId, i);
-        newParent.childIds.push(cid);
-      }
-    }
-
     if (newParent.kind === "leaf") throw new InvalidOpError("cannot move into a leaf node");
 
     const oldParent = this.nodes.get(node.parentId)!;

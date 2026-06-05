@@ -5,7 +5,7 @@ import { FixedClock } from "../src/clock";
 import { sizeBasedDecision } from "../src/decompose";
 
 function makeTree(json: unknown): ArtifactTree {
-  const deps: TreeDeps = { idGen: new SeqIdGen(), clock: new FixedClock(0), decision: sizeBasedDecision(5) };
+  const deps: TreeDeps = { idGen: new SeqIdGen(), clock: new FixedClock(0), decision: sizeBasedDecision(4) };
   return ArtifactTree.fromJson(json as never, deps);
 }
 
