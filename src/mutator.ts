@@ -19,6 +19,8 @@ export interface MutateOpts {
   writeScope?: string;
   /** Optimistic concurrency: reject unless the target's current version equals this. */
   ifVersion?: number;
+  /** Register/override the node's type (drives validation and the decompose override). */
+  type?: string;
 }
 
 export class Mutator {
@@ -59,9 +61,10 @@ export class Mutator {
     const node = this.resolve(ref);
     this.checkScope(node, opts.writeScope);
     this.checkVersion(node, opts.ifVersion);
-    this.deps.validate?.({ node, proposed: value, type: node.type, op: "set" });
+    const type = opts.type ?? node.type;
+    this.deps.validate?.({ node, proposed: value, type, op: "set" });
     const before = this.tree.toJson(node.id);
-    this.tree.replaceValue(node.id, value);
+    this.tree.replaceValue(node.id, value, type);
     this.bump(node, opts.owner);
     this.log.append({
       kind: "set",
@@ -79,8 +82,9 @@ export class Mutator {
     const parent = this.resolve(parentRef);
     this.checkScope(parent, opts.writeScope);
     this.checkVersion(parent, opts.ifVersion);
-    this.deps.validate?.({ node: null, proposed: value, type: undefined, op: "insert" });
-    const newId = this.tree.insertChild(parent.id, keyOrIndex, value);
+    const type = opts.type;
+    this.deps.validate?.({ node: null, proposed: value, type, op: "insert" });
+    const newId = this.tree.insertChild(parent.id, keyOrIndex, value, type);
     this.bump(parent, opts.owner);
     const child = this.tree.get(newId)!;
     this.log.append({
