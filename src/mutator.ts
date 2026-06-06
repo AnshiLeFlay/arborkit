@@ -21,6 +21,8 @@ export interface MutateOpts {
   ifVersion?: number;
   /** Register/override the node's type (drives validation and the decompose override). */
   type?: string;
+  /** Replace the node's tags (identity labels for exact `find` by tag). */
+  tags?: string[];
 }
 
 export class Mutator {
@@ -65,6 +67,7 @@ export class Mutator {
     this.deps.validate?.({ node, proposed: value, type, op: "set" });
     const before = this.tree.toJson(node.id);
     this.tree.replaceValue(node.id, value, type);
+    if (opts.tags !== undefined) node.tags = opts.tags;
     this.bump(node, opts.owner);
     this.log.append({
       kind: "set",
@@ -85,8 +88,9 @@ export class Mutator {
     const type = opts.type;
     this.deps.validate?.({ node: null, proposed: value, type, op: "insert" });
     const newId = this.tree.insertChild(parent.id, keyOrIndex, value, type);
-    this.bump(parent, opts.owner);
     const child = this.tree.get(newId)!;
+    if (opts.tags !== undefined) child.tags = opts.tags;
+    this.bump(parent, opts.owner);
     this.log.append({
       kind: "insert",
       targetId: newId,
