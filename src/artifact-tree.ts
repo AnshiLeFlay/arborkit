@@ -27,8 +27,8 @@ export class ArtifactTree {
     return tree;
   }
 
-  private build(value: Json, parentId: NodeId | null, key: string | number | null): NodeId {
-    const opaque = this.deps.decision.isOpaque(value);
+  private build(value: Json, parentId: NodeId | null, key: string | number | null, type?: string): NodeId {
+    const opaque = this.deps.decision.isOpaque(value, type);
     const kind = kindOf(value, opaque);
     const id = this.deps.idGen.next();
     const node: ArbNode = {
@@ -40,6 +40,7 @@ export class ArtifactTree {
       childIds: [],
       meta: { version: 0, updatedAt: this.deps.clock.now(), embedding: { state: "none" } },
     };
+    if (type !== undefined) node.type = type;
     this.nodes.set(id, node);
 
     if (kind === "object") {
@@ -95,15 +96,16 @@ export class ArtifactTree {
   }
 
   /** Replace the subtree value at `id` in place, keeping the node's id/key/parentId. */
-  replaceValue(id: NodeId, value: Json): void {
+  replaceValue(id: NodeId, value: Json, type?: string): void {
     const node = this.nodes.get(id);
     if (!node) throw new InvalidOpError(`Unknown node: ${id}`);
     this.deleteDescendants(id);
-    const opaque = this.deps.decision.isOpaque(value);
+    const opaque = this.deps.decision.isOpaque(value, type);
     const kind = kindOf(value, opaque);
     node.kind = kind;
     node.content = kind === "leaf" ? value : null;
     node.childIds = [];
+    if (type !== undefined) node.type = type;
     if (kind === "object") {
       for (const [k, v] of Object.entries(value as Record<string, Json>)) {
         node.childIds.push(this.build(v, id, k));
@@ -145,7 +147,7 @@ export class ArtifactTree {
   }
 
   /** Insert a decomposed `value` as a child of `parentId`. For objects `keyOrIndex` is the string key; for arrays it is the insert index. Returns the new child's id. */
-  insertChild(parentId: NodeId, keyOrIndex: string | number, value: Json): NodeId {
+  insertChild(parentId: NodeId, keyOrIndex: string | number, value: Json, type?: string): NodeId {
     const parent = this.nodes.get(parentId);
     if (!parent) throw new InvalidOpError(`Unknown node: ${parentId}`);
     if (parent.kind === "object") {
@@ -155,7 +157,7 @@ export class ArtifactTree {
       if (parent.childIds.some((cid) => this.nodes.get(cid)!.key === keyOrIndex)) {
         throw new InvalidOpError(`key already exists: ${keyOrIndex}`);
       }
-      const cid = this.build(value, parentId, keyOrIndex);
+      const cid = this.build(value, parentId, keyOrIndex, type);
       parent.childIds.push(cid);
       return cid;
     }
@@ -164,7 +166,7 @@ export class ArtifactTree {
         throw new InvalidOpError("array insert requires a numeric index");
       }
       const at = Math.max(0, Math.min(keyOrIndex, parent.childIds.length));
-      const cid = this.build(value, parentId, at);
+      const cid = this.build(value, parentId, at, type);
       parent.childIds.splice(at, 0, cid);
       this.renumberArray(parentId);
       return cid;
