@@ -3,6 +3,7 @@ import type { ArtifactTree } from "./artifact-tree";
 import type { Addressing } from "./addressing";
 import { type Ref, NodeNotFoundError } from "./errors";
 import { byteSize } from "./decompose";
+import { matchGlob } from "./path-glob";
 
 const DEFAULT_LIMIT = 100;
 const PREVIEW_MAX = 50;
@@ -47,6 +48,22 @@ export interface GetResult {
   content: Json;
   meta: NodeMeta;
   truncated?: boolean;
+}
+
+export interface FindSelector {
+  type?: string;
+  tag?: string;
+  pathPattern?: string;
+}
+
+export interface FindOpts {
+  limit?: number;
+}
+
+export interface FindHit {
+  id: NodeId;
+  path: string;
+  type?: string;
 }
 
 function previewOf(node: ArbNode): string {
@@ -136,5 +153,33 @@ export class Navigator {
     };
     if (truncated) result.truncated = true;
     return result;
+  }
+
+  private matches(node: ArbNode, sel: FindSelector): boolean {
+    if (sel.type !== undefined && node.type !== sel.type) return false;
+    if (sel.tag !== undefined && !(node.tags?.includes(sel.tag) ?? false)) return false;
+    if (sel.pathPattern !== undefined && !matchGlob(sel.pathPattern, this.addressing.pathOf(node.id))) {
+      return false;
+    }
+    return true;
+  }
+
+  /** Find nodes matching ALL provided selector fields (exact `type`, `tag` membership, glob `pathPattern`). */
+  find(selector: FindSelector, opts: FindOpts = {}): FindHit[] {
+    const limit = opts.limit ?? DEFAULT_LIMIT;
+    const hits: FindHit[] = [];
+    const visit = (id: NodeId): void => {
+      if (hits.length >= limit) return;
+      const node = this.tree.get(id)!;
+      if (this.matches(node, selector)) {
+        hits.push({ id: node.id, path: this.addressing.pathOf(node.id), type: node.type });
+      }
+      for (const cid of node.childIds) {
+        if (hits.length >= limit) break;
+        visit(cid);
+      }
+    };
+    visit(this.tree.rootIdValue());
+    return hits;
   }
 }
