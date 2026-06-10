@@ -11,6 +11,10 @@ export type Validator = (input: { node: ArbNode | null; proposed: Json; type?: s
 export interface MutatorDeps {
   clock: Clock;
   validate?: Validator;
+  /** Called after a node's content changes (set/insert) — e.g. to mark a semantic index stale. */
+  onChange?: (node: ArbNode) => void;
+  /** Called after a node is removed — e.g. to drop it from a semantic index. */
+  onRemove?: (nodeId: NodeId) => void;
 }
 
 export interface MutateOpts {
@@ -69,6 +73,7 @@ export class Mutator {
     this.tree.replaceValue(node.id, value, type);
     if (opts.tags !== undefined) node.tags = opts.tags;
     this.bump(node, opts.owner);
+    this.deps.onChange?.(node);
     this.log.append({
       kind: "set",
       targetId: node.id,
@@ -91,6 +96,7 @@ export class Mutator {
     const child = this.tree.get(newId)!;
     if (opts.tags !== undefined) child.tags = opts.tags;
     this.bump(parent, opts.owner);
+    this.deps.onChange?.(child);
     this.log.append({
       kind: "insert",
       targetId: newId,
@@ -113,6 +119,7 @@ export class Mutator {
     const removedKey = node.key;
     this.tree.removeChild(node.parentId, node.id);
     this.bump(parent, opts.owner);
+    this.deps.onRemove?.(node.id);
     this.log.append({
       kind: "remove",
       targetId: node.id,
