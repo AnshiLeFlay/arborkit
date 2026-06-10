@@ -1,10 +1,31 @@
-import type { ArbNode, NodeId } from "./types";
+import type { ArbNode, NodeId, Json } from "./types";
 import type { ArtifactTree } from "./artifact-tree";
 import type { Addressing } from "./addressing";
 import type { TypeRegistry } from "./type-registry";
 import type { EmbeddingPort } from "./embedding-port";
 import type { VectorIndexPort } from "./vector-index-port";
 import { toEmbeddingText, textHash } from "./embedding-text";
+
+export interface SearchOpts {
+  k?: number;
+  under?: string;
+  type?: string;
+  tag?: string;
+  freshness?: "best-effort" | "wait";
+}
+
+export interface SearchHit {
+  id: NodeId;
+  path: string;
+  type?: string;
+  score: number;
+  snippet: string;
+}
+
+export interface SearchResult {
+  results: SearchHit[];
+  staleCount: number;
+}
 
 /**
  * Owns the per-node semantic index: a stale queue fed by mutation hooks, an async
@@ -86,5 +107,40 @@ export class SemanticIndex {
       }
     }
     for (const id of ids) this.stale.delete(id);
+  }
+
+  private snippetOf(value: Json): string {
+    const s = JSON.stringify(value);
+    return s.length <= 80 ? s : s.slice(0, 80) + "…";
+  }
+
+  /**
+   * Semantic search: embed the query, rank indexed nodes by cosine, post-filter by
+   * under/type/tag, return top-k. `freshness: "wait"` flushes the reindexer first;
+   * default `best-effort` searches what's indexed and reports `staleCount`.
+   */
+  async search(queryText: string, opts: SearchOpts = {}): Promise<SearchResult> {
+    if (opts.freshness === "wait") await this.reindex();
+    const k = opts.k ?? 8;
+    const [queryVec] = await this.embedding.embed([queryText]);
+    const ranked = this.vectors.search(queryVec, this.vectors.size());
+    const results: SearchHit[] = [];
+    for (const hit of ranked) {
+      if (results.length >= k) break;
+      const node = this.tree.get(hit.nodeId);
+      if (!node) continue;
+      const path = this.addressing.pathOf(node.id);
+      if (opts.under !== undefined && path !== opts.under && !path.startsWith(opts.under + "/")) continue;
+      if (opts.type !== undefined && node.type !== opts.type) continue;
+      if (opts.tag !== undefined && !(node.tags?.includes(opts.tag) ?? false)) continue;
+      results.push({
+        id: node.id,
+        path,
+        type: node.type,
+        score: hit.score,
+        snippet: this.snippetOf(this.tree.toJson(node.id)),
+      });
+    }
+    return { results, staleCount: this.staleCount() };
   }
 }
