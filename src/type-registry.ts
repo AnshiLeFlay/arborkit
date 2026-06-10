@@ -6,6 +6,8 @@ export interface TypeDef {
   validate?: (value: Json) => void;
   /** Override the size-based decomposition for nodes of this type. */
   decompose?: "opaque" | "children";
+  /** Override the text used to embed nodes of this type. Return null to skip embedding. */
+  embedText?: (value: Json) => string | null;
 }
 
 /** A registry of named node types (validator + decompose override). */
