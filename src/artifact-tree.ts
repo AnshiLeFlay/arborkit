@@ -221,4 +221,29 @@ export class ArtifactTree {
       this.nodes.get(cid)!.key = i;
     });
   }
+
+  /** All nodes in the tree (for serialization). */
+  allNodes(): ArbNode[] {
+    return [...this.nodes.values()];
+  }
+
+  /** Rebuild a tree from previously serialized nodes, preserving their ids. */
+  static fromStored(nodes: ArbNode[], rootId: NodeId, deps: TreeDeps): ArtifactTree {
+    const tree = new ArtifactTree(deps);
+    for (const node of nodes) tree.nodes.set(node.id, node);
+    tree.rootId = rootId;
+    return tree;
+  }
+
+  /** All transitive descendant ids of `id` (depth-first), excluding `id` itself. */
+  descendantIds(id: NodeId): NodeId[] {
+    const out: NodeId[] = [];
+    const node = this.nodes.get(id);
+    if (!node) return out;
+    for (const cid of node.childIds) {
+      out.push(cid);
+      out.push(...this.descendantIds(cid));
+    }
+    return out;
+  }
 }
