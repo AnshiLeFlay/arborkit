@@ -70,10 +70,14 @@ export class Mutator {
     const type = opts.type ?? node.type;
     this.deps.validate?.({ node, proposed: value, type, op: "set" });
     const before = this.tree.toJson(node.id);
+    const orphaned = this.tree.descendantIds(node.id);
     this.tree.replaceValue(node.id, value, type);
     if (opts.tags !== undefined) node.tags = opts.tags;
     this.bump(node, opts.owner);
     this.deps.onChange?.(node);
+    if (this.deps.onRemove) {
+      for (const id of orphaned) this.deps.onRemove(id);
+    }
     this.log.append({
       kind: "set",
       targetId: node.id,
@@ -115,11 +119,14 @@ export class Mutator {
     this.checkScope(node, opts.writeScope);
     this.checkVersion(node, opts.ifVersion);
     const before = this.tree.toJson(node.id);
+    const removedIds = [node.id, ...this.tree.descendantIds(node.id)];
     const parent = this.tree.get(node.parentId)!;
     const removedKey = node.key;
     this.tree.removeChild(node.parentId, node.id);
     this.bump(parent, opts.owner);
-    this.deps.onRemove?.(node.id);
+    if (this.deps.onRemove) {
+      for (const id of removedIds) this.deps.onRemove(id);
+    }
     this.log.append({
       kind: "remove",
       targetId: node.id,
