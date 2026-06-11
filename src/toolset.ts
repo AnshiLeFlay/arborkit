@@ -56,6 +56,14 @@ function within(path: string, scope: string | undefined): boolean {
   return scope === undefined || path === scope || path.startsWith(scope + "/");
 }
 
+/** An event is within scope if any of its recorded paths is within scope. */
+function eventWithinScope(e: MutationEvent, scope: string): boolean {
+  if (e.path !== undefined && within(e.path, scope)) return true;
+  if (e.toPath !== undefined && within(e.toPath, scope)) return true;
+  if (e.fromPath !== undefined && within(e.fromPath, scope)) return true;
+  return false;
+}
+
 /** Run a tool body, converting thrown errors into a structured ToolResult. */
 async function run<T>(fn: () => T | Promise<T>): Promise<ToolResult<T>> {
   try {
@@ -101,6 +109,9 @@ export function makeToolset(deps: ToolsetDeps, binding: ToolsetBinding = {}): To
     search: (query, opts = {}) =>
       run(async () => {
         if (!deps.index) throw new InvalidOpError("no semantic index configured for this toolset");
+        if (binding.readScope !== undefined && opts.under !== undefined && !within(opts.under, binding.readScope)) {
+          throw new ScopeViolationError(opts.under, binding.readScope);
+        }
         const under = opts.under ?? binding.readScope;
         return deps.index.search(query, { ...opts, under });
       }),
@@ -125,13 +136,17 @@ export function makeToolset(deps: ToolsetDeps, binding: ToolsetBinding = {}): To
 
     history: (ref, opts = {}) =>
       run(() => {
-        const all = [...deps.log.entries()];
-        let events = all;
+        let events = [...deps.log.entries()];
         if (ref !== undefined) {
           const node = "id" in ref ? addressing.byId(ref.id) : addressing.byPath(ref.path);
           if (!node) throw new NodeNotFoundError(ref);
+          const path = addressing.pathOf(node.id);
+          if (!within(path, binding.readScope)) throw new ScopeViolationError(path, binding.readScope!);
           const id = node.id;
-          events = all.filter((e) => e.targetId === id);
+          events = events.filter((e) => e.targetId === id);
+        } else if (binding.readScope !== undefined) {
+          const scope = binding.readScope;
+          events = events.filter((e) => eventWithinScope(e, scope));
         }
         return opts.limit !== undefined ? events.slice(-opts.limit) : events;
       }),
