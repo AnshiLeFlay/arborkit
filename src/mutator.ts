@@ -83,6 +83,7 @@ export class Mutator {
       targetId: node.id,
       parentId: node.parentId,
       key: node.key,
+      path: this.addressing.pathOf(node.id),
       before,
       after: value,
       actor: opts.owner,
@@ -106,6 +107,7 @@ export class Mutator {
       targetId: newId,
       parentId: parent.id,
       key: child.key,
+      path: this.addressing.pathOf(newId),
       after: value,
       actor: opts.owner,
       ts: this.deps.clock.now(),
@@ -119,6 +121,7 @@ export class Mutator {
     this.checkScope(node, opts.writeScope);
     this.checkVersion(node, opts.ifVersion);
     const before = this.tree.toJson(node.id);
+    const path = this.addressing.pathOf(node.id);
     const removedIds = [node.id, ...this.tree.descendantIds(node.id)];
     const parent = this.tree.get(node.parentId)!;
     const removedKey = node.key;
@@ -132,6 +135,7 @@ export class Mutator {
       targetId: node.id,
       parentId: parent.id,
       key: removedKey,
+      path,
       before,
       actor: opts.owner,
       ts: this.deps.clock.now(),
@@ -147,7 +151,9 @@ export class Mutator {
     this.checkVersion(node, opts.ifVersion);
     const oldParentId = node.parentId;
     const from = { parentId: node.parentId, key: node.key };
+    const fromPath = this.addressing.pathOf(node.id);
     this.tree.moveNode(node.id, toParent.id, keyOrIndex);
+    const toPath = this.addressing.pathOf(node.id);
     // bump moved node + both parents (dedupe if old === new parent)
     const bumped = new Set<NodeId>();
     for (const id of [node.id, oldParentId, toParent.id]) {
@@ -164,6 +170,8 @@ export class Mutator {
       key: node.key,
       from,
       to: { parentId: toParent.id, key: node.key },
+      fromPath,
+      toPath,
       actor: opts.owner,
       ts: this.deps.clock.now(),
     });

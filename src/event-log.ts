@@ -19,6 +19,12 @@ export interface MutationEvent {
   after?: Json;
   from?: { parentId: NodeId | null; key: string | number | null };
   to?: { parentId: NodeId | null; key: string | number | null };
+  /** JSON Pointer of the affected node (set/insert: its path; remove: its pre-removal path). */
+  path?: string;
+  /** move: source path (before the move). */
+  fromPath?: string;
+  /** move: destination path (after the move). */
+  toPath?: string;
   actor?: string;
   ts: number;
 }
