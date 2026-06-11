@@ -1,6 +1,6 @@
 import type { ArtifactTree } from "./artifact-tree";
 import type { Addressing } from "./addressing";
-import type { EventLog } from "./event-log";
+import type { EventLog, MutationEvent } from "./event-log";
 import type { Mutator } from "./mutator";
 import type { SemanticIndex } from "./semantic-index";
 import {
@@ -14,10 +14,17 @@ import {
   type FindHit,
 } from "./navigator";
 import type { SearchOpts, SearchResult } from "./semantic-index";
-import { type Ref, ArborError, ScopeViolationError, InvalidOpError } from "./errors";
+import { type Ref, ArborError, ScopeViolationError, InvalidOpError, NodeNotFoundError } from "./errors";
+import type { Json, NodeId } from "./types";
 
 /** Every toolset call returns this — errors are structured, never thrown across the agent boundary. */
 export type ToolResult<T> = { ok: true; value: T } | { ok: false; error: { code: string; message: string } };
+
+export type PatchOp =
+  | { op: "set"; value: Json; ifVersion?: number }
+  | { op: "insert"; key: string | number; value: Json; ifVersion?: number }
+  | { op: "remove"; ifVersion?: number }
+  | { op: "move"; to: Ref; key: string | number; ifVersion?: number };
 
 export interface ToolsetDeps {
   tree: ArtifactTree;
@@ -40,6 +47,8 @@ export interface Toolset {
   get(ref: Ref, opts?: GetOpts): Promise<ToolResult<GetResult>>;
   find(selector: FindSelector, opts?: FindOpts): Promise<ToolResult<FindHit[]>>;
   search(query: string, opts?: SearchOpts): Promise<ToolResult<SearchResult>>;
+  patch(ref: Ref, op: PatchOp): Promise<ToolResult<{ id?: NodeId }>>;
+  history(ref?: Ref, opts?: { limit?: number }): Promise<ToolResult<MutationEvent[]>>;
 }
 
 /** path is within scope if scope is unset, equal, or an ancestor prefix. */
@@ -94,6 +103,37 @@ export function makeToolset(deps: ToolsetDeps, binding: ToolsetBinding = {}): To
         if (!deps.index) throw new InvalidOpError("no semantic index configured for this toolset");
         const under = opts.under ?? binding.readScope;
         return deps.index.search(query, { ...opts, under });
+      }),
+
+    patch: (ref, op) =>
+      run<{ id?: NodeId }>(() => {
+        const common = { owner: binding.owner, writeScope: binding.writeScope, ifVersion: op.ifVersion };
+        switch (op.op) {
+          case "set":
+            deps.mutator.set(ref, op.value, common);
+            return {};
+          case "insert":
+            return { id: deps.mutator.insert(ref, op.key, op.value, common) };
+          case "remove":
+            deps.mutator.remove(ref, common);
+            return {};
+          case "move":
+            deps.mutator.move(ref, op.to, op.key, common);
+            return {};
+        }
+      }),
+
+    history: (ref, opts = {}) =>
+      run(() => {
+        const all = [...deps.log.entries()];
+        let events = all;
+        if (ref !== undefined) {
+          const node = "id" in ref ? addressing.byId(ref.id) : addressing.byPath(ref.path);
+          if (!node) throw new NodeNotFoundError(ref);
+          const id = node.id;
+          events = all.filter((e) => e.targetId === id);
+        }
+        return opts.limit !== undefined ? events.slice(-opts.limit) : events;
       }),
   };
 }
