@@ -49,4 +49,11 @@ export class EventLog {
   truncateTo(length: number): void {
     this.events.length = length;
   }
+
+  /** Rebuild a log from previously serialized events, preserving their seq. */
+  static fromStored(events: MutationEvent[]): EventLog {
+    const log = new EventLog();
+    for (const e of events) log.events.push({ ...e });
+    return log;
+  }
 }

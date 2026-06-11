@@ -17,6 +17,7 @@ export interface VectorIndexPort {
   search(query: number[], k: number): VectorHit[];
   has(nodeId: NodeId): boolean;
   size(): number;
+  entries(): VectorIndexEntry[];
 }
 
 function cosine(a: number[], b: number[]): number {
@@ -59,5 +60,9 @@ export class MemoryVectorIndex implements VectorIndexPort {
     }
     hits.sort((a, b) => b.score - a.score);
     return hits.slice(0, k);
+  }
+
+  entries(): VectorIndexEntry[] {
+    return [...this.vectors].map(([nodeId, vector]) => ({ nodeId, vector }));
   }
 }
