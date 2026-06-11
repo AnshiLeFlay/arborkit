@@ -9,8 +9,12 @@ import {
   type DescribeResult,
   type GetOpts,
   type GetResult,
+  type FindSelector,
+  type FindOpts,
+  type FindHit,
 } from "./navigator";
-import { type Ref, ArborError, ScopeViolationError } from "./errors";
+import type { SearchOpts, SearchResult } from "./semantic-index";
+import { type Ref, ArborError, ScopeViolationError, InvalidOpError } from "./errors";
 
 /** Every toolset call returns this — errors are structured, never thrown across the agent boundary. */
 export type ToolResult<T> = { ok: true; value: T } | { ok: false; error: { code: string; message: string } };
@@ -34,6 +38,8 @@ export interface ToolsetBinding {
 export interface Toolset {
   describe(ref?: Ref, opts?: DescribeOpts): Promise<ToolResult<DescribeResult>>;
   get(ref: Ref, opts?: GetOpts): Promise<ToolResult<GetResult>>;
+  find(selector: FindSelector, opts?: FindOpts): Promise<ToolResult<FindHit[]>>;
+  search(query: string, opts?: SearchOpts): Promise<ToolResult<SearchResult>>;
 }
 
 /** path is within scope if scope is unset, equal, or an ancestor prefix. */
@@ -75,6 +81,19 @@ export function makeToolset(deps: ToolsetDeps, binding: ToolsetBinding = {}): To
           throw new ScopeViolationError(r.path, binding.readScope!);
         }
         return { ...r, meta: structuredClone(r.meta) };
+      }),
+
+    find: (selector, opts) =>
+      run(() => {
+        const hits = navigator.find(selector, opts);
+        return binding.readScope === undefined ? hits : hits.filter((h) => within(h.path, binding.readScope));
+      }),
+
+    search: (query, opts = {}) =>
+      run(async () => {
+        if (!deps.index) throw new InvalidOpError("no semantic index configured for this toolset");
+        const under = opts.under ?? binding.readScope;
+        return deps.index.search(query, { ...opts, under });
       }),
   };
 }
