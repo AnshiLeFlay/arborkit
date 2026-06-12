@@ -61,6 +61,8 @@ describe("SemanticIndex lifecycle", () => {
     index.onChange(node);
     await index.reindex();
     index.onRemove(id);
+    // Removal is deferred to the next reindex() call (tx-safe deferred-removal contract).
+    await index.reindex();
     expect(vectors.has(id)).toBe(false);
     expect(index.staleCount()).toBe(0);
   });

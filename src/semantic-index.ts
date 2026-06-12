@@ -34,6 +34,7 @@ export interface SearchResult {
  */
 export class SemanticIndex {
   private readonly stale = new Set<NodeId>();
+  private readonly pendingRemoval = new Set<NodeId>();
 
   constructor(
     private readonly tree: ArtifactTree,
@@ -50,32 +51,38 @@ export class SemanticIndex {
     }
   }
 
+  /**
+   * A node is a suppressed decomposition shard iff some ANCESTOR has a typed
+   * embedText AND the node does not itself declare a typed embedText.
+   * (O(depth) walk per call — fine at v1 artifact sizes.)
+   */
+  private isSuppressedShard(node: ArbNode): boolean {
+    const ownTypeDef = node.type ? this.registry?.get(node.type) : undefined;
+    if (ownTypeDef?.embedText) return false; // node is its own semantic unit
+    let pid = node.parentId;
+    while (pid !== null) {
+      const anc = this.tree.get(pid);
+      const ancDef = anc?.type ? this.registry?.get(anc.type) : undefined;
+      if (ancDef?.embedText) return true;
+      pid = anc?.parentId ?? null;
+    }
+    return false;
+  }
+
   /** Mutation hook: a node's content changed (set/insert). Marks it stale if its embedding-text changed. */
   onChange(node: ArbNode): void {
-    // A node is a decomposition shard of a semantic unit iff some ANCESTOR has a
-    // typed embedText AND the node is not itself a declared semantic unit.
-    // (O(depth) walk per onChange — fine at v1 artifact sizes.)
-    const ownTypeDef = node.type ? this.registry?.get(node.type) : undefined;
-    if (!ownTypeDef?.embedText) {
-      let pid = node.parentId;
-      while (pid !== null) {
-        const anc = this.tree.get(pid);
-        const ancDef = anc?.type ? this.registry?.get(anc.type) : undefined;
-        if (ancDef?.embedText) {
-          node.meta.embedding = { state: "none" };
-          this.vectors.remove(node.id);
-          this.stale.delete(node.id);
-          return;
-        }
-        pid = anc?.parentId ?? null;
-      }
+    if (this.isSuppressedShard(node)) {
+      node.meta.embedding = { state: "none" };
+      this.pendingRemoval.add(node.id);
+      this.stale.delete(node.id);
+      return;
     }
     const value = this.tree.toJson(node.id);
     const typeDef = node.type ? this.registry?.get(node.type) : undefined;
     const text = toEmbeddingText(node, value, typeDef);
     if (text === null) {
       node.meta.embedding = { state: "none" };
-      this.vectors.remove(node.id);
+      this.pendingRemoval.add(node.id);
       this.stale.delete(node.id);
       return;
     }
@@ -84,26 +91,38 @@ export class SemanticIndex {
       return;
     }
     node.meta.embedding = { state: "stale", textHash: hash };
+    this.pendingRemoval.delete(node.id);
     this.stale.add(node.id);
   }
 
   /** Mutation hook: a node was removed. Drops it from the index and the stale queue. */
   onRemove(nodeId: NodeId): void {
-    this.vectors.remove(nodeId);
+    this.pendingRemoval.add(nodeId);
     this.stale.delete(nodeId);
   }
 
-  /** Snapshot of the stale queue for transaction rollback (vectors never change
-   *  inside a transaction: `transaction(fn)` is synchronous and all vector writes
-   *  happen in the async `reindex()`). */
+  /**
+   * Snapshot of both queues for transaction rollback.
+   *
+   * The sync hooks (`onChange`, `onRemove`) only move ids between the `stale`
+   * queue and the `pendingRemoval` queue; all actual vector mutations happen in
+   * the async `reindex()`. This snapshot covers both queues so that a rollback
+   * fully restores the observable state of the index without touching vectors.
+   */
   txSnapshot(): unknown {
-    return new Set(this.stale);
+    return {
+      stale: new Set(this.stale),
+      pendingRemoval: new Set(this.pendingRemoval),
+    };
   }
 
-  /** Restore the stale queue captured by `txSnapshot`. */
+  /** Restore both queues captured by `txSnapshot`. */
   txRestore(snapshot: unknown): void {
+    const snap = snapshot as { stale: Set<NodeId>; pendingRemoval: Set<NodeId> };
     this.stale.clear();
-    for (const id of snapshot as Set<NodeId>) this.stale.add(id);
+    for (const id of snap.stale) this.stale.add(id);
+    this.pendingRemoval.clear();
+    for (const id of snap.pendingRemoval) this.pendingRemoval.add(id);
   }
 
   /** Convenience: the hooks to wire into `MutatorDeps`. */
@@ -127,12 +146,23 @@ export class SemanticIndex {
 
   /** Embed every stale node (one batch), upsert vectors, mark fresh, clear the processed ids. */
   async reindex(): Promise<void> {
+    // First: drain deferred removals (HOLE 2 fix — removals queued by sync hooks).
+    for (const id of this.pendingRemoval) this.vectors.remove(id);
+    this.pendingRemoval.clear();
+
     const ids = [...this.stale];
     if (ids.length === 0) return;
     const items: { id: NodeId; text: string; hash: string }[] = [];
     for (const id of ids) {
       const node = this.tree.get(id);
       if (!node) continue;
+      // HOLE 1 fix: guard-aware reindex — suppress shards that belong to a typed
+      // ancestor's embedding unit.
+      if (this.isSuppressedShard(node)) {
+        node.meta.embedding = { state: "none" };
+        this.vectors.remove(id);
+        continue;
+      }
       const value = this.tree.toJson(id);
       const typeDef = node.type ? this.registry?.get(node.type) : undefined;
       const text = toEmbeddingText(node, value, typeDef);
@@ -172,6 +202,8 @@ export class SemanticIndex {
     const results: SearchHit[] = [];
     for (const hit of ranked) {
       if (results.length >= k) break;
+      // Skip logically-removed entries that haven't been physically flushed yet.
+      if (this.pendingRemoval.has(hit.nodeId)) continue;
       const node = this.tree.get(hit.nodeId);
       if (!node) continue;
       const path = this.addressing.pathOf(node.id);
