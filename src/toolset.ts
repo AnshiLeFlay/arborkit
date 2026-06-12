@@ -97,7 +97,10 @@ export function makeToolset(deps: ToolsetDeps, binding: ToolsetBinding = {}): To
         if (!within(r.path, binding.readScope)) {
           throw new ScopeViolationError(r.path, binding.readScope!);
         }
-        return { ...r, meta: structuredClone(r.meta) };
+        // Deep-clone the WHOLE result: `content` (and `meta`) come from the live
+        // tree by reference; handing them across the agent boundary would let a
+        // caller mutate the artifact without an event, bypassing write-scope.
+        return structuredClone(r);
       }),
 
     find: (selector, opts) =>
