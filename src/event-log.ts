@@ -25,6 +25,10 @@ export interface MutationEvent {
   fromPath?: string;
   /** move: destination path (after the move). */
   toPath?: string;
+  /** set/remove: the node's type BEFORE the op; insert/set: `nodeType` = type AFTER.
+   *  `null` = explicitly untyped; ABSENT = pre-M10 event (unknown — replay keeps the current type). */
+  nodeTypeBefore?: string | null;
+  nodeType?: string | null;
   actor?: string;
   ts: number;
 }

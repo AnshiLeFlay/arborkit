@@ -27,8 +27,9 @@ export interface MutateOpts {
   writeScope?: string;
   /** Optimistic concurrency: reject unless the target's current version equals this. */
   ifVersion?: number;
-  /** Register/override the node's type (drives validation and the decompose override). */
-  type?: string;
+  /** Register/override the node's type (drives validation and the decompose override).
+   *  `null` explicitly CLEARS the type (validation is skipped) — used by type-aware revert. */
+  type?: string | null;
   /** Replace the node's tags (identity labels for exact `find` by tag). */
   tags?: string[];
 }
@@ -71,11 +72,13 @@ export class Mutator {
     const node = this.resolve(ref);
     this.checkScope(node, opts.writeScope);
     this.checkVersion(node, opts.ifVersion);
-    const type = opts.type ?? node.type;
+    const clearType = opts.type === null;
+    const type = clearType ? undefined : (opts.type ?? node.type);
     this.deps.validate?.({ node, proposed: value, type, op: "set" });
     const before = this.tree.toJson(node.id);
+    const typeBefore = node.type;
     const orphaned = this.tree.descendantIds(node.id);
-    this.tree.replaceValue(node.id, value, type);
+    this.tree.replaceValue(node.id, value, type, clearType);
     if (opts.tags !== undefined) node.tags = opts.tags;
     this.bump(node, opts.owner);
     this.deps.onChange?.(node);
@@ -98,6 +101,8 @@ export class Mutator {
       path: this.addressing.pathOf(node.id),
       before,
       after: value,
+      nodeTypeBefore: typeBefore ?? null,
+      nodeType: type ?? null,
       actor: opts.owner,
       ts: this.deps.clock.now(),
     });
@@ -107,7 +112,7 @@ export class Mutator {
     const parent = this.resolve(parentRef);
     this.checkScope(parent, opts.writeScope);
     this.checkVersion(parent, opts.ifVersion);
-    const type = opts.type;
+    const type = opts.type === null ? undefined : opts.type;
     this.deps.validate?.({ node: null, proposed: value, type, op: "insert" });
     const newId = this.tree.insertChild(parent.id, keyOrIndex, value, type);
     const child = this.tree.get(newId)!;
@@ -127,6 +132,7 @@ export class Mutator {
       key: child.key,
       path: this.addressing.pathOf(newId),
       after: value,
+      nodeType: child.type ?? null,
       actor: opts.owner,
       ts: this.deps.clock.now(),
     });
@@ -155,6 +161,7 @@ export class Mutator {
       key: removedKey,
       path,
       before,
+      nodeTypeBefore: node.type ?? null,
       actor: opts.owner,
       ts: this.deps.clock.now(),
     });

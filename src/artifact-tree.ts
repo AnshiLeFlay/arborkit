@@ -95,8 +95,9 @@ export class ArtifactTree {
     return obj;
   }
 
-  /** Replace the subtree value at `id` in place, keeping the node's id/key/parentId. */
-  replaceValue(id: NodeId, value: Json, type?: string): void {
+  /** Replace the subtree value at `id` in place, keeping the node's id/key/parentId.
+   *  `clearType` explicitly un-types the node (used by type-aware revert). */
+  replaceValue(id: NodeId, value: Json, type?: string, clearType = false): void {
     const node = this.nodes.get(id);
     if (!node) throw new InvalidOpError(`Unknown node: ${id}`);
     this.deleteDescendants(id);
@@ -105,7 +106,8 @@ export class ArtifactTree {
     node.kind = kind;
     node.content = kind === "leaf" ? value : null;
     node.childIds = [];
-    if (type !== undefined) node.type = type;
+    if (clearType) node.type = undefined;
+    else if (type !== undefined) node.type = type;
     if (kind === "object") {
       for (const [k, v] of Object.entries(value as Record<string, Json>)) {
         node.childIds.push(this.build(v, id, k));

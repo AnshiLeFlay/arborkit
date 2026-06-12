@@ -53,10 +53,27 @@ export class Replay {
     return [...this.log.entries()].slice(vA, vB);
   }
 
-  /** Restore the node at `ref` to its value as of `toVersion`, as a new live mutation via `mutator`. */
+  /** The node's type as of `version`: a string (typed), null (untyped/absent), or
+   *  undefined (unknown/unchanged since `version` — leave the current type alone). */
+  private typeAt(path: string, version: number): string | null | undefined {
+    const events = this.log.entries();
+    for (let seq = version; seq < events.length; seq++) {
+      const e = events[seq];
+      if (e.path !== path) continue;
+      if (e.kind === "set" || e.kind === "remove") {
+        // the first later op on this path saw the type the node had at `version`
+        return e.nodeTypeBefore === undefined ? undefined : e.nodeTypeBefore;
+      }
+      if (e.kind === "insert") return null; // node did not exist at `version`
+    }
+    return undefined; // no later op touched it: type unchanged since `version`
+  }
+
+  /** Restore the node at `ref` to its value AND type as of `toVersion`, as a new live mutation. */
   revert(mutator: Mutator, addressing: Addressing, ref: Ref, toVersion: number): void {
     const path = "id" in ref ? addressing.pathOf(ref.id) : ref.path;
     const past = this.getAt(path, toVersion);
-    mutator.set({ path }, past ?? null);
+    const pastType = this.typeAt(path, toVersion);
+    mutator.set({ path }, past ?? null, pastType === undefined ? {} : { type: pastType });
   }
 }
