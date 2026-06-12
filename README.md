@@ -16,6 +16,27 @@ per-node exact + semantic index, a reversible event log, snapshots, and time-tra
 - **Replay** — reconstruct any past version, `diff` two versions, `revert` a node (append-only, path-addressed).
 - **Toolset** — `makeToolset(...)` hands an agent a scoped, async, structured-result bundle: `describe`/`get`/`find`/`search`/`patch`/`history`. Writes are confined to `writeScope`, reads to `readScope`; errors are returned, never thrown across the boundary.
 
+## Scope & limits (read this before adopting)
+
+- **Single process, single writer.** The tree lives in memory; storage is a snapshot
+  target, not a database. There is no locking — two processes sharing one artifact
+  file will clobber each other. One artifact = one run = one process.
+- **Scoping is a guardrail, not a security boundary.** `writeScope`/`readScope`
+  contain an agent's *tool calls* (including prompt-injected ones — a writer scoped
+  to `/pages/home` has no path to `/secret`). They do NOT isolate *code*: every
+  toolset shares the same heap, and anything holding the `Mutator` or tree can
+  bypass scope. Do not run mutually-untrusted agent code in one process.
+- **Growth is unbounded in v1.** The event log keeps full `before`/`after` values and
+  is never compacted; `persist` serializes the whole artifact. Fine for pipeline
+  runs (10²–10⁴ nodes, low-MB artifacts); wrong for long-lived, ever-growing state.
+- **Vector search is brute-force cosine** — comfortable to ~10⁴ vectors; plug a real
+  ANN store into `VectorIndexPort` beyond that.
+- **Ops are id-anchored** (a useful property for a future CRDT backend), but there is
+  **no CRDT**: no merge, no convergence, no multi-writer conflict resolution.
+- **`ifVersion` on `insert` is parent-scoped:** it is a compare-and-set on the
+  *container's* version, and every sibling insert bumps the container. Use it to
+  guard "the container hasn't changed", not "my item is new".
+
 ## Quickstart
 
 ```ts
