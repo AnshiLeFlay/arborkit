@@ -41,7 +41,14 @@ export class SemanticIndex {
     private readonly embedding: EmbeddingPort,
     private readonly vectors: VectorIndexPort,
     private readonly registry?: TypeRegistry,
-  ) {}
+  ) {
+    // Recover the stale queue after a restore: `stale` itself is not persisted,
+    // but each node's `meta.embedding.state` is. A fresh tree has only "none"
+    // states, so this is a no-op there.
+    for (const node of tree.allNodes()) {
+      if (node.meta.embedding.state === "stale") this.stale.add(node.id);
+    }
+  }
 
   /** Mutation hook: a node's content changed (set/insert). Marks it stale if its embedding-text changed. */
   onChange(node: ArbNode): void {
