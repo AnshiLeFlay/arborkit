@@ -52,6 +52,21 @@ export class SemanticIndex {
 
   /** Mutation hook: a node's content changed (set/insert). Marks it stale if its embedding-text changed. */
   onChange(node: ArbNode): void {
+    // If this node's parent has a registered type with a custom `embedText`, the
+    // parent is the semantic unit and this node is just a decomposition artifact —
+    // don't index it separately (it would produce false hits and outrank the parent).
+    if (node.parentId !== null) {
+      const parent = this.tree.get(node.parentId);
+      if (parent?.type) {
+        const parentTypeDef = this.registry?.get(parent.type);
+        if (parentTypeDef?.embedText) {
+          node.meta.embedding = { state: "none" };
+          this.vectors.remove(node.id);
+          this.stale.delete(node.id);
+          return;
+        }
+      }
+    }
     const value = this.tree.toJson(node.id);
     const typeDef = node.type ? this.registry?.get(node.type) : undefined;
     const text = toEmbeddingText(node, value, typeDef);

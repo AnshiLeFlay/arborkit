@@ -75,6 +75,14 @@ export class Mutator {
     if (opts.tags !== undefined) node.tags = opts.tags;
     this.bump(node, opts.owner);
     this.deps.onChange?.(node);
+    if (this.deps.onChange) {
+      // replaceValue rebuilt the subtree: every descendant is a NEW node and
+      // must be announced too (text leaves are what the semantic index embeds).
+      for (const id of this.tree.descendantIds(node.id)) {
+        const child = this.tree.get(id);
+        if (child) this.deps.onChange(child);
+      }
+    }
     if (this.deps.onRemove) {
       for (const id of orphaned) this.deps.onRemove(id);
     }
@@ -102,6 +110,12 @@ export class Mutator {
     if (opts.tags !== undefined) child.tags = opts.tags;
     this.bump(parent, opts.owner);
     this.deps.onChange?.(child);
+    if (this.deps.onChange) {
+      for (const id of this.tree.descendantIds(newId)) {
+        const desc = this.tree.get(id);
+        if (desc) this.deps.onChange(desc);
+      }
+    }
     this.log.append({
       kind: "insert",
       targetId: newId,
