@@ -15,6 +15,10 @@ export interface MutatorDeps {
   onChange?: (node: ArbNode) => void;
   /** Called after a node is removed — e.g. to drop it from a semantic index. */
   onRemove?: (nodeId: NodeId) => void;
+  /** Called at transaction start; the returned snapshot is passed to `onTxRestore` on rollback. */
+  onTxSnapshot?: () => unknown;
+  /** Called on transaction rollback with the snapshot from `onTxSnapshot`. */
+  onTxRestore?: (snapshot: unknown) => void;
 }
 
 export interface MutateOpts {
@@ -191,15 +195,17 @@ export class Mutator {
     });
   }
 
-  /** Run `fn` atomically: if it throws, the tree and log are restored to their pre-transaction state. */
+  /** Run `fn` atomically: if it throws, the tree, log, and any hooked index state are restored. */
   transaction(fn: () => void): void {
     const snap = this.tree.snapshot();
     const logLen = this.log.length();
+    const hookSnap = this.deps.onTxSnapshot?.();
     try {
       fn();
     } catch (err) {
       this.tree.restore(snap);
       this.log.truncateTo(logLen);
+      if (this.deps.onTxRestore) this.deps.onTxRestore(hookSnap);
       throw err;
     }
   }

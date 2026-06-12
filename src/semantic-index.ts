@@ -90,11 +90,31 @@ export class SemanticIndex {
     this.stale.delete(nodeId);
   }
 
+  /** Snapshot of the stale queue for transaction rollback (vectors never change
+   *  inside a transaction: `transaction(fn)` is synchronous and all vector writes
+   *  happen in the async `reindex()`). */
+  txSnapshot(): unknown {
+    return new Set(this.stale);
+  }
+
+  /** Restore the stale queue captured by `txSnapshot`. */
+  txRestore(snapshot: unknown): void {
+    this.stale.clear();
+    for (const id of snapshot as Set<NodeId>) this.stale.add(id);
+  }
+
   /** Convenience: the hooks to wire into `MutatorDeps`. */
-  hooks(): { onChange: (node: ArbNode) => void; onRemove: (nodeId: NodeId) => void } {
+  hooks(): {
+    onChange: (node: ArbNode) => void;
+    onRemove: (nodeId: NodeId) => void;
+    onTxSnapshot: () => unknown;
+    onTxRestore: (snapshot: unknown) => void;
+  } {
     return {
       onChange: (node) => this.onChange(node),
       onRemove: (nodeId) => this.onRemove(nodeId),
+      onTxSnapshot: () => this.txSnapshot(),
+      onTxRestore: (snapshot) => this.txRestore(snapshot),
     };
   }
 
