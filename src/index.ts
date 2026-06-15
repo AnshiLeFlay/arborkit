@@ -1,0 +1,27 @@
+// Arbor public API — one barrel over every module. Consumers may import from
+// here ("arbor") or from per-module subpaths ("arbor/toolset", ...).
+export * from "./types";
+export * from "./ids";
+export * from "./clock";
+export * from "./jsonpointer";
+export * from "./decompose";
+export * from "./artifact-tree";
+export * from "./addressing";
+export * from "./errors";
+export * from "./event-log";
+export * from "./mutator";
+export * from "./type-registry";
+export * from "./registry-validator";
+export * from "./type-aware-decision";
+export * from "./zod-adapter";
+export * from "./path-glob";
+export * from "./navigator";
+export * from "./embedding-port";
+export * from "./embedding-text";
+export * from "./semantic-index";
+export * from "./vector-index-port";
+export * from "./storage";
+export * from "./file-storage";
+export * from "./json-edit";
+export * from "./replay";
+export * from "./toolset";
