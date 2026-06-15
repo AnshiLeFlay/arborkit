@@ -75,12 +75,33 @@ npm test          # vitest
 npm run typecheck # tsc --noEmit
 ```
 
+## Install as a package
+
+Arbor builds to `dist/` (ESM + type declarations):
+
+```bash
+npm run build      # tsup → dist/
+npm pack           # → arbor-1.0.0.tgz (prepack builds automatically)
+# in a consumer project:
+npm install /path/to/arbor-1.0.0.tgz
+```
+
+```ts
+import { ArtifactTree, Mutator, makeToolset } from "arbor"; // barrel
+import { Replay } from "arbor/replay";                      // or per-module subpaths
+```
+
+ESM-only, Node ≥ 20.6, zero runtime dependencies. `private: true` is kept until a
+public registry name is chosen (`arbor` is taken on npm; publishing would use a
+scoped name). Consumers that alias `arbor/*` to this repo's `src/*` via tsconfig
+paths keep working unchanged — only the npm tarball is restricted to `dist/`.
+
 ## Docs
 
 Design spec and milestone plans live in [`docs/superpowers/`](docs/superpowers/).
 
 ## Status
 
-**v1 core complete (M1–M9):** tree, mutations + reversible log, optional types, exact navigation, semantic index, storage, replay/time-travel, scoped agent toolset, and the end-to-end scenario.
+**v1 core complete (M1–M9), hardened (M10), packaged (M11):** tree, mutations + reversible log, optional types, exact navigation, semantic index, storage, replay/time-travel, scoped agent toolset, end-to-end scenario, index-lifecycle hardening, and an installable ESM build.
 
 Deferred (post-v1): LangChain `tool()` / MCP-server adapters over the toolset; `getAt`/`revert` as toolset methods; DB-backed storage & vector adapters (SQLite/sqlite-vec, Postgres/pgvector); a CRDT backend.
