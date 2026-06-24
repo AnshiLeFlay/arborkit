@@ -3,7 +3,7 @@ import type { ArtifactTree } from "./artifact-tree";
 import type { Addressing } from "./addressing";
 import type { EventLog, MutationEvent } from "./event-log";
 import type { Mutator } from "./mutator";
-import type { Ref } from "./errors";
+import { type Ref, InvalidOpError } from "./errors";
 import { getAtPath, setAtPath, removeAtPath, insertAtPath } from "./json-edit";
 
 /** Undo a single event on a JSON value, addressed by the event's recorded path(s). */
@@ -31,14 +31,18 @@ export class Replay {
     private readonly log: EventLog,
   ) {}
 
-  /** The whole artifact's JSON value as of `version` (0 = initial, log.length = current). */
+  /** The whole artifact's JSON value as of `version` (0 = initial, log.length = current).
+   *  Throws if `version` is below the compaction floor (that history was dropped). */
   reconstructValueAt(version: number): Json {
     const total = this.log.length();
-    const target = Math.max(0, Math.min(version, total));
+    const floor = this.log.baseSeqValue();
+    if (version < floor) {
+      throw new InvalidOpError(`cannot reconstruct version ${version}: history before ${floor} was compacted`);
+    }
+    const target = Math.min(version, total);
     let value: Json = structuredClone(this.tree.toJson());
-    const events = this.log.entries();
     for (let seq = total - 1; seq >= target; seq--) {
-      value = reverseApplyValue(value, events[seq]);
+      value = reverseApplyValue(value, this.log.at(seq)!);
     }
     return value;
   }
@@ -48,25 +52,25 @@ export class Replay {
     return getAtPath(this.reconstructValueAt(version), path);
   }
 
-  /** The mutations applied between version `vA` (inclusive) and `vB` (exclusive). */
+  /** The mutations applied between version `vA` (inclusive) and `vB` (exclusive).
+   *  Events compacted away are not included. */
   diff(vA: number, vB: number): MutationEvent[] {
-    return [...this.log.entries()].slice(vA, vB);
+    return this.log.since(vA).filter((e) => e.seq < vB);
   }
 
   /** The node's type as of `version`: a string (typed), null (untyped/absent), or
    *  undefined (unknown/unchanged since `version` — leave the current type alone). */
   private typeAt(path: string, version: number): string | null | undefined {
-    const events = this.log.entries();
-    for (let seq = version; seq < events.length; seq++) {
-      const e = events[seq];
+    const total = this.log.length();
+    for (let seq = Math.max(version, this.log.baseSeqValue()); seq < total; seq++) {
+      const e = this.log.at(seq)!;
       if (e.path !== path) continue;
       if (e.kind === "set" || e.kind === "remove") {
-        // the first later op on this path saw the type the node had at `version`
         return e.nodeTypeBefore === undefined ? undefined : e.nodeTypeBefore;
       }
-      if (e.kind === "insert") return null; // node did not exist at `version`
+      if (e.kind === "insert") return null;
     }
-    return undefined; // no later op touched it: type unchanged since `version`
+    return undefined;
   }
 
   /** Restore the node at `ref` to its value AND type as of `toVersion`, as a new live mutation. */
