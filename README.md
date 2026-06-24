@@ -26,9 +26,13 @@ per-node exact + semantic index, a reversible event log, snapshots, and time-tra
   to `/pages/home` has no path to `/secret`). They do NOT isolate *code*: every
   toolset shares the same heap, and anything holding the `Mutator` or tree can
   bypass scope. Do not run mutually-untrusted agent code in one process.
-- **Growth is unbounded in v1.** The event log keeps full `before`/`after` values and
-  is never compacted; `persist` serializes the whole artifact. Fine for pipeline
-  runs (10²–10⁴ nodes, low-MB artifacts); wrong for long-lived, ever-growing state.
+- **Log growth is bounded by opt-in compaction.** `EventLog.compactTo(floorSeq)` drops
+  history before a floor — e.g. `log.compactTo(log.length() - N)` keeps a sliding window
+  of the last N events, capping both memory and the serialized event payload (the floor
+  is persisted as `baseSeq` and survives restore). Time-travel (`getAt`/`reconstructValueAt`/
+  `revert`) below the floor throws — that history is gone. Nothing auto-compacts; choose a
+  policy (per run, sliding window, or never). `persist` still serializes the whole **tree**
+  every save (delta persistence is future work) — so very large artifacts remain costly.
 - **Vector search is brute-force cosine** — comfortable to ~10⁴ vectors; plug a real
   ANN store into `VectorIndexPort` beyond that.
 - **Ops are id-anchored** (a useful property for a future CRDT backend), but there is
@@ -102,6 +106,6 @@ Design spec and milestone plans live in [`docs/superpowers/`](docs/superpowers/)
 
 ## Status
 
-**v1 core complete (M1–M9), hardened (M10), packaged (M11):** tree, mutations + reversible log, optional types, exact navigation, semantic index, storage, replay/time-travel, scoped agent toolset, end-to-end scenario, index-lifecycle hardening, and an installable ESM build.
+**v1 core complete (M1–M9), hardened (M10), packaged (M11), log compaction (M12):** tree, mutations + reversible log, optional types, exact navigation, semantic index, storage, replay/time-travel, scoped agent toolset, end-to-end scenario, index-lifecycle hardening, and an installable ESM build.
 
 Deferred (post-v1): LangChain `tool()` / MCP-server adapters over the toolset; `getAt`/`revert` as toolset methods; DB-backed storage & vector adapters (SQLite/sqlite-vec, Postgres/pgvector); a CRDT backend.
