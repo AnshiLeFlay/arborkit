@@ -33,12 +33,15 @@ export interface MutationEvent {
   ts: number;
 }
 
-/** Append-only log of mutations with monotonic seq. */
+/** Append-only log of mutations with monotonic, absolute seq. Supports compaction:
+ *  events before `baseSeq` are dropped, but retained events keep their absolute seq
+ *  and `length()` stays the absolute next-seq, so versions never shift. */
 export class EventLog {
   private readonly events: MutationEvent[] = [];
+  private baseSeq = 0; // count of compacted-away events; events[0].seq === baseSeq
 
   append(event: Omit<MutationEvent, "seq">): MutationEvent {
-    const full: MutationEvent = { ...event, seq: this.events.length };
+    const full: MutationEvent = { ...event, seq: this.baseSeq + this.events.length };
     this.events.push(full);
     return full;
   }
@@ -47,22 +50,50 @@ export class EventLog {
     return this.events;
   }
 
+  /** Absolute seq of the oldest retained event (0 until compaction). Versions below
+   *  this have been compacted away and are no longer reconstructable. */
+  baseSeqValue(): number {
+    return this.baseSeq;
+  }
+
+  /** The event at absolute `seq`, or undefined if compacted away / past the end. */
+  at(seq: number): MutationEvent | undefined {
+    const i = seq - this.baseSeq;
+    return i >= 0 && i < this.events.length ? this.events[i] : undefined;
+  }
+
   since(seq: number): MutationEvent[] {
     return this.events.filter((e) => e.seq >= seq);
   }
 
+  /** Absolute next-seq / current version (unchanged across compaction). */
   length(): number {
-    return this.events.length;
+    return this.baseSeq + this.events.length;
   }
 
-  /** Drop events past `length` — used to roll back a failed transaction. */
+  /** Drop events past absolute `length` — used to roll back a failed transaction. */
   truncateTo(length: number): void {
-    this.events.length = length;
+    this.events.length = Math.max(0, length - this.baseSeq);
   }
 
-  /** Rebuild a log from previously serialized events, preserving their seq. */
-  static fromStored(events: MutationEvent[]): EventLog {
+  /** Compaction: drop every retained event with seq < `floorSeq` (history before it
+   *  becomes unreconstructable). `floorSeq` is clamped to [baseSeq, length()].
+   *  Returns the number of events dropped. */
+  compactTo(floorSeq: number): number {
+    const floor = Math.max(this.baseSeq, Math.min(floorSeq, this.length()));
+    const drop = floor - this.baseSeq;
+    if (drop > 0) {
+      this.events.splice(0, drop);
+      this.baseSeq = floor;
+    }
+    return drop;
+  }
+
+  /** Rebuild a log from previously serialized events, preserving their seq + the
+   *  compaction floor. */
+  static fromStored(events: MutationEvent[], baseSeq = 0): EventLog {
     const log = new EventLog();
+    log.baseSeq = baseSeq;
     for (const e of events) log.events.push({ ...e });
     return log;
   }
