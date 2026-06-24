@@ -5,7 +5,7 @@ function isStoredArtifact(v: unknown): v is StoredArtifact {
   if (typeof v !== "object" || v === null) return false;
   const a = v as Record<string, unknown>;
   return (
-    a["version"] === 1 &&
+    (a["version"] === 1 || a["version"] === 2) &&
     typeof a["rootId"] === "string" &&
     Array.isArray(a["nodes"]) &&
     Array.isArray(a["events"]) &&

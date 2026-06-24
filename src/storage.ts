@@ -3,12 +3,15 @@ import { ArtifactTree, type TreeDeps } from "./artifact-tree";
 import { EventLog, type MutationEvent } from "./event-log";
 import type { VectorIndexPort, VectorIndexEntry } from "./vector-index-port";
 
-/** A JSON-serializable snapshot of an entire artifact: tree + event-log + vectors. */
+/** A JSON-serializable snapshot of an entire artifact: tree + event-log + vectors.
+ *  v2 adds `baseSeq` (the event-log compaction floor); v1 files restore with floor 0. */
 export interface StoredArtifact {
-  version: 1;
+  version: 1 | 2;
   rootId: NodeId;
   nodes: ArbNode[];
   events: MutationEvent[];
+  /** Absolute seq of the oldest retained event (compaction floor). Absent in v1 → 0. */
+  baseSeq?: number;
   vectors: VectorIndexEntry[];
 }
 
@@ -18,13 +21,14 @@ export interface StoragePort {
   load(): Promise<StoredArtifact | null>;
 }
 
-/** Dump the live components into a StoredArtifact. */
+/** Dump the live components into a StoredArtifact (v2). */
 export function serializeArtifact(tree: ArtifactTree, log: EventLog, vectors: VectorIndexPort): StoredArtifact {
   return {
-    version: 1,
+    version: 2,
     rootId: tree.rootIdValue(),
     nodes: tree.allNodes(),
     events: [...log.entries()],
+    baseSeq: log.baseSeqValue(),
     vectors: vectors.entries(),
   };
 }
@@ -36,7 +40,7 @@ export function restoreArtifact(
   vectors: VectorIndexPort,
 ): { tree: ArtifactTree; log: EventLog } {
   const tree = ArtifactTree.fromStored(stored.nodes, stored.rootId, deps);
-  const log = EventLog.fromStored(stored.events);
+  const log = EventLog.fromStored(stored.events, stored.baseSeq ?? 0);
   vectors.upsert(stored.vectors);
   return { tree, log };
 }

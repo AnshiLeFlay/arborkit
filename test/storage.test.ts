@@ -30,7 +30,7 @@ describe("serializeArtifact", () => {
   it("dumps the live components into a versioned StoredArtifact", () => {
     const { tree, log, vectors } = build();
     const s = serializeArtifact(tree, log, vectors);
-    expect(s.version).toBe(1);
+    expect(s.version).toBe(2);
     expect(s.rootId).toBe(tree.rootIdValue());
     expect(s.nodes.length).toBe(tree.size());
     expect(s.events.length).toBe(log.length());
