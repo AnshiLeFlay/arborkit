@@ -139,7 +139,7 @@ describe("M9 content-site scenario (full stack)", () => {
     await w.index.reindex();
 
     const store = new MemoryStorage();
-    await store.save(serializeArtifact(w.tree, w.log, w.vectors));
+    await store.save(await serializeArtifact(w.tree, w.log, w.vectors));
     const loaded = (await store.load())!;
 
     const freshDeps: TreeDeps = {
@@ -148,7 +148,7 @@ describe("M9 content-site scenario (full stack)", () => {
       decision: typeAwareDecision(sizeBasedDecision(1), w.registry),
     };
     const freshVectors = new MemoryVectorIndex();
-    const { tree: rtree, log: rlog } = restoreArtifact(loaded, freshDeps, freshVectors);
+    const { tree: rtree, log: rlog } = await restoreArtifact(loaded, freshDeps, freshVectors);
     const rindex = new SemanticIndex(rtree, new Addressing(rtree), new MockEmbeddingPort(), freshVectors, w.registry);
 
     expect(rtree.toJson()).toEqual(w.tree.toJson());

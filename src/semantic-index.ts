@@ -150,7 +150,7 @@ export class SemanticIndex {
    *  stays queued for the next pass instead of being marked fresh for the old text. */
   async reindex(): Promise<void> {
     // First: drain deferred removals (HOLE 2 fix — removals queued by sync hooks).
-    for (const id of this.pendingRemoval) this.vectors.remove(id);
+    for (const id of this.pendingRemoval) await this.vectors.remove(id);
     this.pendingRemoval.clear();
 
     const ids = [...this.stale];
@@ -167,7 +167,7 @@ export class SemanticIndex {
       // ancestor's embedding unit.
       if (this.isSuppressedShard(node)) {
         node.meta.embedding = { state: "none" };
-        this.vectors.remove(id);
+        await this.vectors.remove(id);
         completed.add(id);
         continue;
       }
@@ -176,7 +176,7 @@ export class SemanticIndex {
       const text = toEmbeddingText(node, value, typeDef);
       if (text === null) {
         node.meta.embedding = { state: "none" };
-        this.vectors.remove(id);
+        await this.vectors.remove(id);
         completed.add(id);
         continue;
       }
@@ -190,7 +190,7 @@ export class SemanticIndex {
       for (const [i, it] of items.entries()) {
         const node = this.tree.get(it.id);
         if (!node) {
-          this.vectors.remove(it.id); // removed mid-flight — do not resurrect
+          await this.vectors.remove(it.id); // removed mid-flight — do not resurrect
           completed.add(it.id);
           continue;
         }
@@ -212,7 +212,7 @@ export class SemanticIndex {
         node.meta.embedding = { state: "fresh", textHash: it.hash };
         completed.add(it.id);
       }
-      if (upserts.length > 0) this.vectors.upsert(upserts);
+      if (upserts.length > 0) await this.vectors.upsert(upserts);
     }
     for (const id of ids) {
       if (completed.has(id)) this.stale.delete(id);
@@ -233,7 +233,7 @@ export class SemanticIndex {
     if (opts.freshness === "wait") await this.reindex();
     const k = opts.k ?? 8;
     const [queryVec] = await this.embedding.embed([queryText]);
-    const ranked = this.vectors.search(queryVec, this.vectors.size());
+    const ranked = await this.vectors.search(queryVec, await this.vectors.size());
     const results: SearchHit[] = [];
     for (const hit of ranked) {
       if (results.length >= k) break;

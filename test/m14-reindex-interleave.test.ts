@@ -65,9 +65,9 @@ describe("M14 reindex interleaving", () => {
     s.mutator.remove({ path: "/a" }); // vanishes mid-flight
     embedder.gate();
     await expect(p).resolves.toBeUndefined(); // pre-fix: TypeError reading 'meta'
-    expect(s.vectors.has(keepId)).toBe(true); // survivor indexed
+    expect(await s.vectors.has(keepId)).toBe(true); // survivor indexed
     await s.index.reindex(); // drain pendingRemoval
-    expect(s.vectors.size()).toBe(1); // no resurrected vector for the removed node
+    expect(await s.vectors.size()).toBe(1); // no resurrected vector for the removed node
   });
 
   it("a node whose text becomes null during the embed await is not marked falsely fresh", async () => {
@@ -81,7 +81,7 @@ describe("M14 reindex interleaving", () => {
     const node = s.addressing.byPath("/a")!;
     expect(node.meta.embedding.state).toBe("none"); // pre-fix: "fresh" with the OLD text's hash
     await s.index.reindex(); // drain the queued removal
-    expect(s.vectors.has(node.id)).toBe(false);
+    expect(await s.vectors.has(node.id)).toBe(false);
     // the forever-miss case: the same text returns → must be re-marked stale, not skipped
     s.mutator.set({ path: "/a" }, "string-text");
     expect(node.meta.embedding.state).toBe("stale");
@@ -109,6 +109,6 @@ describe("M14 reindex interleaving", () => {
     expect(index.staleCount()).toBe(0); // pre-fix: never drains
     const leaf = addressing.byPath("/docs/a")!;
     expect(leaf.meta.embedding.state).toBe("fresh"); // pre-fix: stuck "stale" forever
-    expect(vectors.has(leaf.id)).toBe(true);
+    expect(await vectors.has(leaf.id)).toBe(true);
   });
 });

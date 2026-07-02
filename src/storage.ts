@@ -22,26 +22,30 @@ export interface StoragePort {
 }
 
 /** Dump the live components into a StoredArtifact (v2). */
-export function serializeArtifact(tree: ArtifactTree, log: EventLog, vectors: VectorIndexPort): StoredArtifact {
+export async function serializeArtifact(
+  tree: ArtifactTree,
+  log: EventLog,
+  vectors: VectorIndexPort,
+): Promise<StoredArtifact> {
   return {
     version: 2,
     rootId: tree.rootIdValue(),
     nodes: tree.allNodes(),
     events: [...log.entries()],
     baseSeq: log.baseSeqValue(),
-    vectors: vectors.entries(),
+    vectors: await vectors.entries(),
   };
 }
 
 /** Rebuild a fresh tree + log from a StoredArtifact, and upsert its vectors into `vectors`. */
-export function restoreArtifact(
+export async function restoreArtifact(
   stored: StoredArtifact,
   deps: TreeDeps,
   vectors: VectorIndexPort,
-): { tree: ArtifactTree; log: EventLog } {
+): Promise<{ tree: ArtifactTree; log: EventLog }> {
   const tree = ArtifactTree.fromStored(stored.nodes, stored.rootId, deps);
   const log = EventLog.fromStored(stored.events, stored.baseSeq ?? 0);
-  vectors.upsert(stored.vectors);
+  await vectors.upsert(stored.vectors);
   return { tree, log };
 }
 

@@ -28,11 +28,11 @@ describe("M10 C2: stale state survives persist→restore", () => {
     expect(index.staleCount()).toBe(1); // stale, NOT reindexed — the normal mid-run state
 
     const store = new MemoryStorage();
-    await store.save(serializeArtifact(tree, log, vectors)); // persisted while stale
+    await store.save(await serializeArtifact(tree, log, vectors)); // persisted while stale
 
     const loaded = (await store.load())!;
     const freshVectors = new MemoryVectorIndex();
-    const { tree: rtree } = restoreArtifact(loaded, freshDeps(), freshVectors);
+    const { tree: rtree } = await restoreArtifact(loaded, freshDeps(), freshVectors);
     const rindex = new SemanticIndex(rtree, new Addressing(rtree), new MockEmbeddingPort(), freshVectors);
 
     expect(rindex.staleCount()).toBe(1); // FIX: seeded from meta.embedding.state

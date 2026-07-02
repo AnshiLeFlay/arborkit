@@ -83,7 +83,7 @@ console.log("4. semantic search top hit:", hit.ok && hit.value.results[0]?.path)
 
 // 6. Persist the whole artifact and restore it into fresh components — search still works.
 const store = new MemoryStorage();
-await store.save(serializeArtifact(tree, log, vectors));
+await store.save(await serializeArtifact(tree, log, vectors));
 const loaded = (await store.load())!;
 const freshVectors = new MemoryVectorIndex();
 const restoreDeps: TreeDeps = {
@@ -91,7 +91,7 @@ const restoreDeps: TreeDeps = {
   clock: new SystemClock(),
   decision: typeAwareDecision(sizeBasedDecision(1), registry),
 };
-const { tree: rtree } = restoreArtifact(loaded, restoreDeps, freshVectors);
+const { tree: rtree } = await restoreArtifact(loaded, restoreDeps, freshVectors);
 const rindex = new SemanticIndex(rtree, new Addressing(rtree), new MockEmbeddingPort(), freshVectors, registry);
 const afterRestore = await rindex.search("Pricing plans and cost");
 console.log("5. search after restore:", afterRestore.results[0]?.path);

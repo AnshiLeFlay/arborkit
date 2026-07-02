@@ -40,10 +40,10 @@ describe("M12 capstone: bounded log via sliding-window compaction, round-tripped
 
     // persist (bounded payload) → restore → floor + recent history intact
     const store = new MemoryStorage();
-    await store.save(serializeArtifact(tree, log, new MemoryVectorIndex()));
+    await store.save(await serializeArtifact(tree, log, new MemoryVectorIndex()));
     const loaded = (await store.load())!;
     expect(loaded.events.length).toBe(5); // only the window is serialized
-    const { tree: rtree, log: rlog } = restoreArtifact(loaded, freshDeps(), new MemoryVectorIndex());
+    const { tree: rtree, log: rlog } = await restoreArtifact(loaded, freshDeps(), new MemoryVectorIndex());
     expect(rlog.baseSeqValue()).toBe(45);
     const rreplay = new Replay(rtree, rlog);
     expect(rreplay.getAt("/page", 50)).toBe("revision 50");

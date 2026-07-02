@@ -38,7 +38,7 @@ describe("M13 delta persist + restore", () => {
     const idGone = a.addressing.byPath("/docs/gone")!.id;
 
     const vectors = new MemoryVectorIndex();
-    vectors.upsert([
+    await vectors.upsert([
       { nodeId: idKeep, vector: [1, 0] },
       { nodeId: idGone, vector: [0, 1] },
     ]);
@@ -59,8 +59,8 @@ describe("M13 delta persist + restore", () => {
 
     const raddr = new Addressing(r.tree);
     expect(raddr.byPath("/docs/edit")!.type).toBe("doc"); // type preserved through restore
-    expect(v2.has(idKeep)).toBe(true); // unchanged node keeps its checkpoint vector
-    expect(v2.has(idGone)).toBe(false); // removed node's vector dropped
+    expect(await v2.has(idKeep)).toBe(true); // unchanged node keeps its checkpoint vector
+    expect(await v2.has(idGone)).toBe(false); // removed node's vector dropped
     expect(raddr.byPath("/docs/edit")!.meta.embedding.state).toBe("stale"); // touched → reindex
 
     // the restored log is intact: value-level time-travel still works

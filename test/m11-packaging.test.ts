@@ -27,9 +27,9 @@ const refused = await tools.patch({ path: "/secret" }, { op: "set", value: 1 });
 if (refused.ok) throw new Error("scope violation not refused");
 
 const store = new MemoryStorage();
-await store.save(serializeArtifact(tree, log, new MemoryVectorIndex()));
+await store.save(await serializeArtifact(tree, log, new MemoryVectorIndex()));
 const loaded = await store.load();
-const { tree: rtree } = restoreArtifact(loaded, deps, new MemoryVectorIndex());
+const { tree: rtree } = await restoreArtifact(loaded, deps, new MemoryVectorIndex());
 if (JSON.stringify(rtree.toJson()) !== JSON.stringify(tree.toJson())) throw new Error("roundtrip failed");
 
 const replay = new Replay(tree, log);

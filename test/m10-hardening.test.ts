@@ -41,10 +41,10 @@ describe("M10 capstone: the index survives decomposition, restore, and failed tr
 
     // persist while stale → restore → still searchable after reindex (C2)
     const store = new MemoryStorage();
-    await store.save(serializeArtifact(tree, log, vectors));
+    await store.save(await serializeArtifact(tree, log, vectors));
     const loaded = (await store.load())!;
     const freshVectors = new MemoryVectorIndex();
-    const { tree: rtree } = restoreArtifact(loaded, freshDeps(), freshVectors);
+    const { tree: rtree } = await restoreArtifact(loaded, freshDeps(), freshVectors);
     const rindex = new SemanticIndex(rtree, new Addressing(rtree), new MockEmbeddingPort(), freshVectors);
     expect(rindex.staleCount()).toBe(staleAfterInsert);
     await rindex.reindex();

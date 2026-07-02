@@ -87,7 +87,7 @@ export async function persistCheckpoint(
   log: EventLog,
   vectors: VectorIndexPort,
 ): Promise<number> {
-  await store.writeCheckpoint(serializeArtifact(tree, log, vectors));
+  await store.writeCheckpoint(await serializeArtifact(tree, log, vectors));
   return log.length();
 }
 
@@ -136,7 +136,7 @@ export async function restoreFromDelta(
       },
     },
   };
-  const { tree } = restoreArtifact(checkpoint, guardedDeps, vectors);
+  const { tree } = await restoreArtifact(checkpoint, guardedDeps, vectors);
   const addressing = new Addressing(tree);
   const replayLog = new EventLog(); // throwaway — the faithful log is rebuilt below
   const mutator = new Mutator(tree, addressing, replayLog, {

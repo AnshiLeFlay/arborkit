@@ -35,12 +35,12 @@ describe("M12 storage preserves the compaction floor", () => {
     mutator.set({ path: "/docs/a" }, "y"); // 1
     log.compactTo(1);
 
-    const dumped = serializeArtifact(tree, log, new MemoryVectorIndex());
+    const dumped = await serializeArtifact(tree, log, new MemoryVectorIndex());
     expect(dumped.version).toBe(2);
     expect(dumped.baseSeq).toBe(1);
     expect(dumped.events.map((e) => e.seq)).toEqual([1]); // only the retained window
 
-    const { tree: rtree, log: rlog } = restoreArtifact(dumped, freshDeps(), new MemoryVectorIndex());
+    const { tree: rtree, log: rlog } = await restoreArtifact(dumped, freshDeps(), new MemoryVectorIndex());
     expect(rlog.baseSeqValue()).toBe(1);
     expect(rlog.length()).toBe(2);
     const replay = new Replay(rtree, rlog);
@@ -48,7 +48,7 @@ describe("M12 storage preserves the compaction floor", () => {
     expect(replay.getAt("/docs/a", 2)).toBe("y");
   });
 
-  it("restore tolerates a v1 stored artifact (no baseSeq → floor 0)", () => {
+  it("restore tolerates a v1 stored artifact (no baseSeq → floor 0)", async () => {
     const v1: StoredArtifact = {
       version: 1,
       rootId: "n0",
@@ -56,14 +56,14 @@ describe("M12 storage preserves the compaction floor", () => {
       events: [],
       vectors: [],
     };
-    const { log } = restoreArtifact(v1, freshDeps(), new MemoryVectorIndex());
+    const { log } = await restoreArtifact(v1, freshDeps(), new MemoryVectorIndex());
     expect(log.baseSeqValue()).toBe(0);
   });
 
   it("FileStorage round-trips a compacted (v2) artifact", async () => {
     const tree = ArtifactTree.fromJson({ a: "x" }, freshDeps());
     const log = new EventLog();
-    const dumped = serializeArtifact(tree, log, new MemoryVectorIndex());
+    const dumped = await serializeArtifact(tree, log, new MemoryVectorIndex());
     const store = new FileStorage(join(dir, "a.json"));
     await store.save(dumped);
     const loaded = await store.load();

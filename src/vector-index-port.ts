@@ -10,14 +10,15 @@ export interface VectorHit {
   score: number;
 }
 
-/** Stores per-node vectors and ranks by similarity. Brute-force impl below; pgvector/sqlite-vec later. */
+/** Stores per-node vectors and ranks by similarity. Async so DB-backed adapters
+ *  (pgvector, sqlite-vec) can implement it; the in-memory default is sync inside. */
 export interface VectorIndexPort {
-  upsert(entries: VectorIndexEntry[]): void;
-  remove(nodeId: NodeId): void;
-  search(query: number[], k: number): VectorHit[];
-  has(nodeId: NodeId): boolean;
-  size(): number;
-  entries(): VectorIndexEntry[];
+  upsert(entries: VectorIndexEntry[]): Promise<void>;
+  remove(nodeId: NodeId): Promise<void>;
+  search(query: number[], k: number): Promise<VectorHit[]>;
+  has(nodeId: NodeId): Promise<boolean>;
+  size(): Promise<number>;
+  entries(): Promise<VectorIndexEntry[]>;
 }
 
 function cosine(a: number[], b: number[]): number {
@@ -37,23 +38,23 @@ function cosine(a: number[], b: number[]): number {
 export class MemoryVectorIndex implements VectorIndexPort {
   private readonly vectors = new Map<NodeId, number[]>();
 
-  upsert(entries: VectorIndexEntry[]): void {
+  async upsert(entries: VectorIndexEntry[]): Promise<void> {
     for (const e of entries) this.vectors.set(e.nodeId, e.vector);
   }
 
-  remove(nodeId: NodeId): void {
+  async remove(nodeId: NodeId): Promise<void> {
     this.vectors.delete(nodeId);
   }
 
-  has(nodeId: NodeId): boolean {
+  async has(nodeId: NodeId): Promise<boolean> {
     return this.vectors.has(nodeId);
   }
 
-  size(): number {
+  async size(): Promise<number> {
     return this.vectors.size;
   }
 
-  search(query: number[], k: number): VectorHit[] {
+  async search(query: number[], k: number): Promise<VectorHit[]> {
     const hits: VectorHit[] = [];
     for (const [nodeId, vector] of this.vectors) {
       hits.push({ nodeId, score: cosine(query, vector) });
@@ -62,7 +63,7 @@ export class MemoryVectorIndex implements VectorIndexPort {
     return hits.slice(0, k);
   }
 
-  entries(): VectorIndexEntry[] {
+  async entries(): Promise<VectorIndexEntry[]> {
     return [...this.vectors].map(([nodeId, vector]) => ({ nodeId, vector }));
   }
 }

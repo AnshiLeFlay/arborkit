@@ -33,7 +33,7 @@ describe("M10 tx-vectors: vector mutations deferred to reindex (HOLE 2 fix)", ()
     const noteNode = addressing.byPath("/docs/note")!;
     const noteId = noteNode.id;
     // Vector must exist after reindex
-    expect(vectors.has(noteId)).toBe(true);
+    expect(await vectors.has(noteId)).toBe(true);
 
     // Transaction: set the text leaf to a number (which has null embedding-text for a
     // plain non-typed node on sizeBasedDecision threshold=1, the number IS opaque so
@@ -61,7 +61,7 @@ describe("M10 tx-vectors: vector mutations deferred to reindex (HOLE 2 fix)", ()
     await index.reindex();
 
     const noteId = addressing.byPath("/docs/note")!.id;
-    expect(vectors.has(noteId)).toBe(true);
+    expect(await vectors.has(noteId)).toBe(true);
 
     // Transaction removes the node then throws → rollback.
     expect(() =>
@@ -83,7 +83,7 @@ describe("M10 tx-vectors: vector mutations deferred to reindex (HOLE 2 fix)", ()
 
     const noteNode = addressing.byPath("/docs/note")!;
     const noteId = noteNode.id;
-    expect(vectors.has(noteId)).toBe(true);
+    expect(await vectors.has(noteId)).toBe(true);
 
     // Outside tx: set to a number — queues pendingRemoval (does NOT remove vector yet).
     mutator.set({ id: noteId }, 42);
@@ -94,7 +94,7 @@ describe("M10 tx-vectors: vector mutations deferred to reindex (HOLE 2 fix)", ()
 
     // After reindex, the vector is physically removed.
     await index.reindex();
-    expect(vectors.has(noteId)).toBe(false);
+    expect(await vectors.has(noteId)).toBe(false);
   });
 
   it("test 4: HOLE 1 / guard-aware reindex: stale shard node is suppressed at reindex time", async () => {
@@ -157,7 +157,7 @@ describe("M10 tx-vectors: vector mutations deferred to reindex (HOLE 2 fix)", ()
     await index.reindex();
 
     const noteId = addressing.byPath("/docs/note")!.id;
-    expect(vectors.has(noteId)).toBe(true);
+    expect(await vectors.has(noteId)).toBe(true);
 
     // Committed transaction: set to 42 (null embedding text → pendingRemoval).
     mutator.transaction(() => {
@@ -170,6 +170,6 @@ describe("M10 tx-vectors: vector mutations deferred to reindex (HOLE 2 fix)", ()
 
     // After reindex: vector is gone.
     await index.reindex();
-    expect(vectors.has(noteId)).toBe(false);
+    expect(await vectors.has(noteId)).toBe(false);
   });
 });

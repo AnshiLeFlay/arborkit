@@ -40,7 +40,7 @@ describe("SemanticIndex lifecycle", () => {
     index.onChange(node);
     await index.reindex();
     expect(node.meta.embedding.state).toBe("fresh");
-    expect(vectors.has(node.id)).toBe(true);
+    expect(await vectors.has(node.id)).toBe(true);
     expect(index.staleCount()).toBe(0);
   });
 
@@ -63,7 +63,7 @@ describe("SemanticIndex lifecycle", () => {
     index.onRemove(id);
     // Removal is deferred to the next reindex() call (tx-safe deferred-removal contract).
     await index.reindex();
-    expect(vectors.has(id)).toBe(false);
+    expect(await vectors.has(id)).toBe(false);
     expect(index.staleCount()).toBe(0);
   });
 

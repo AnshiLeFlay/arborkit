@@ -22,17 +22,17 @@ describe("EventLog.fromStored", () => {
 });
 
 describe("MemoryVectorIndex.entries", () => {
-  it("dumps all entries, round-trippable via upsert", () => {
+  it("dumps all entries, round-trippable via upsert", async () => {
     const idx = new MemoryVectorIndex();
-    idx.upsert([
+    await idx.upsert([
       { nodeId: "a", vector: [1, 0] },
       { nodeId: "b", vector: [0, 1] },
     ]);
-    const entries = idx.entries();
+    const entries = await idx.entries();
     expect(entries.length).toBe(2);
     const idx2 = new MemoryVectorIndex();
-    idx2.upsert(entries);
-    expect(idx2.size()).toBe(2);
-    expect(idx2.has("a")).toBe(true);
+    await idx2.upsert(entries);
+    expect(await idx2.size()).toBe(2);
+    expect(await idx2.has("a")).toBe(true);
   });
 });

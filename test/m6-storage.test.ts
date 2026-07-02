@@ -39,11 +39,11 @@ describe("M6 storage round-trip", () => {
     await orig.index.reindex();
 
     const store = new MemoryStorage();
-    await store.save(serializeArtifact(orig.tree, orig.log, orig.vectors));
+    await store.save(await serializeArtifact(orig.tree, orig.log, orig.vectors));
     const loaded = (await store.load())!;
 
     const freshVectors = new MemoryVectorIndex();
-    const { tree: rtree, log: rlog } = restoreArtifact(loaded, freshDeps(), freshVectors);
+    const { tree: rtree, log: rlog } = await restoreArtifact(loaded, freshDeps(), freshVectors);
     const rindex = new SemanticIndex(rtree, new Addressing(rtree), new MockEmbeddingPort(), freshVectors);
 
     expect(rtree.toJson()).toEqual(orig.tree.toJson());
@@ -61,12 +61,12 @@ describe("M6 storage round-trip", () => {
     const path = join(tmpdir(), "arbor-m6-capstone.test.json");
     const store = new FileStorage(path);
     try {
-      await store.save(serializeArtifact(orig.tree, orig.log, orig.vectors));
+      await store.save(await serializeArtifact(orig.tree, orig.log, orig.vectors));
       const loaded = (await store.load())!;
       const freshVectors = new MemoryVectorIndex();
-      const { tree: rtree } = restoreArtifact(loaded, freshDeps(), freshVectors);
+      const { tree: rtree } = await restoreArtifact(loaded, freshDeps(), freshVectors);
       expect(rtree.toJson()).toEqual(orig.tree.toJson());
-      expect(freshVectors.size()).toBe(orig.vectors.size());
+      expect(await freshVectors.size()).toBe(await orig.vectors.size());
     } finally {
       await rm(path, { force: true });
     }
