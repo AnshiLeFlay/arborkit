@@ -30,6 +30,11 @@ export interface MutationEvent {
    *  `null` = explicitly untyped; ABSENT = pre-M10 event (unknown — replay keeps the current type). */
   nodeTypeBefore?: string | null;
   nodeType?: string | null;
+  /** set/remove: the node's tags BEFORE the op ([] = untagged).
+   *  ABSENT = pre-M14 event (unknown — revert leaves the current tags alone). */
+  tagsBefore?: string[];
+  /** set/insert: the node's tags AFTER the op ([] = untagged). ABSENT = pre-M14. */
+  tags?: string[];
   actor?: string;
   ts: number;
 }

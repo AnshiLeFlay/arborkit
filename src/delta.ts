@@ -27,19 +27,22 @@ function parentPointer(pointer: string): string {
  */
 export function applyEventForward(mutator: Mutator, e: MutationEvent): void {
   switch (e.kind) {
-    case "set":
+    case "set": {
       if (e.path === undefined) return;
-      mutator.set({ path: e.path }, e.after ?? null, e.nodeType === undefined ? {} : { type: e.nodeType });
+      const opts: { type?: string | null; tags?: string[] } = {};
+      if (e.nodeType !== undefined) opts.type = e.nodeType;
+      if (e.tags !== undefined) opts.tags = e.tags;
+      mutator.set({ path: e.path }, e.after ?? null, opts);
       return;
-    case "insert":
+    }
+    case "insert": {
       if (e.path === undefined || e.key === null) return;
-      mutator.insert(
-        { path: parentPointer(e.path) },
-        e.key,
-        e.after ?? null,
-        e.nodeType === undefined ? {} : { type: e.nodeType },
-      );
+      const opts: { type?: string | null; tags?: string[] } = {};
+      if (e.nodeType !== undefined) opts.type = e.nodeType;
+      if (e.tags !== undefined) opts.tags = e.tags;
+      mutator.insert({ path: parentPointer(e.path) }, e.key, e.after ?? null, opts);
       return;
+    }
     case "remove":
       if (e.path === undefined) return;
       mutator.remove({ path: e.path });
