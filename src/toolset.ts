@@ -151,7 +151,7 @@ export function makeToolset(deps: ToolsetDeps, binding: ToolsetBinding = {}): To
           const scope = binding.readScope;
           events = events.filter((e) => eventWithinScope(e, scope));
         }
-        return opts.limit !== undefined ? events.slice(-opts.limit) : events;
+        return structuredClone(opts.limit !== undefined ? events.slice(-opts.limit) : events);
       }),
   };
 }

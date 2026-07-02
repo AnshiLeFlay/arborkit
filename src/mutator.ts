@@ -72,13 +72,16 @@ export class Mutator {
     const node = this.resolve(ref);
     this.checkScope(node, opts.writeScope);
     this.checkVersion(node, opts.ifVersion);
+    // Defensive copy: neither the tree nor the event log may alias the caller's
+    // live object — post-call mutation would silently rewrite state AND history.
+    const cloned = structuredClone(value);
     const clearType = opts.type === null;
     const type = clearType ? undefined : (opts.type ?? node.type);
-    this.deps.validate?.({ node, proposed: value, type, op: "set" });
+    this.deps.validate?.({ node, proposed: cloned, type, op: "set" });
     const before = this.tree.toJson(node.id);
     const typeBefore = node.type;
     const orphaned = this.tree.descendantIds(node.id);
-    this.tree.replaceValue(node.id, value, type, clearType);
+    this.tree.replaceValue(node.id, cloned, type, clearType);
     if (opts.tags !== undefined) node.tags = opts.tags;
     this.bump(node, opts.owner);
     this.deps.onChange?.(node);
@@ -100,7 +103,7 @@ export class Mutator {
       key: node.key,
       path: this.addressing.pathOf(node.id),
       before,
-      after: value,
+      after: cloned,
       nodeTypeBefore: typeBefore ?? null,
       nodeType: type ?? null,
       actor: opts.owner,
@@ -112,9 +115,12 @@ export class Mutator {
     const parent = this.resolve(parentRef);
     this.checkScope(parent, opts.writeScope);
     this.checkVersion(parent, opts.ifVersion);
+    // Defensive copy: neither the tree nor the event log may alias the caller's
+    // live object — post-call mutation would silently rewrite state AND history.
+    const cloned = structuredClone(value);
     const type = opts.type === null ? undefined : opts.type;
-    this.deps.validate?.({ node: null, proposed: value, type, op: "insert" });
-    const newId = this.tree.insertChild(parent.id, keyOrIndex, value, type);
+    this.deps.validate?.({ node: null, proposed: cloned, type, op: "insert" });
+    const newId = this.tree.insertChild(parent.id, keyOrIndex, cloned, type);
     const child = this.tree.get(newId)!;
     if (opts.tags !== undefined) child.tags = opts.tags;
     this.bump(parent, opts.owner);
@@ -131,7 +137,7 @@ export class Mutator {
       parentId: parent.id,
       key: child.key,
       path: this.addressing.pathOf(newId),
-      after: value,
+      after: cloned,
       nodeType: child.type ?? null,
       actor: opts.owner,
       ts: this.deps.clock.now(),

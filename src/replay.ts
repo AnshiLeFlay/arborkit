@@ -10,11 +10,11 @@ import { getAtPath, setAtPath, removeAtPath, insertAtPath } from "./json-edit";
 function reverseApplyValue(value: Json, e: MutationEvent): Json {
   switch (e.kind) {
     case "set":
-      return e.path === undefined ? value : setAtPath(value, e.path, e.before ?? null);
+      return e.path === undefined ? value : setAtPath(value, e.path, structuredClone(e.before ?? null));
     case "insert":
       return e.path === undefined ? value : removeAtPath(value, e.path);
     case "remove":
-      return e.path === undefined ? value : insertAtPath(value, e.path, e.before ?? null);
+      return e.path === undefined ? value : insertAtPath(value, e.path, structuredClone(e.before ?? null));
     case "move": {
       if (e.toPath === undefined || e.fromPath === undefined) return value;
       const moved = getAtPath(value, e.toPath) ?? null;
