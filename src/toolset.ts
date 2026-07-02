@@ -104,10 +104,7 @@ export function makeToolset(deps: ToolsetDeps, binding: ToolsetBinding = {}): To
       }),
 
     find: (selector, opts) =>
-      run(() => {
-        const hits = navigator.find(selector, opts);
-        return binding.readScope === undefined ? hits : hits.filter((h) => within(h.path, binding.readScope));
-      }),
+      run(() => navigator.find(selector, { ...opts, within: binding.readScope })),
 
     search: (query, opts = {}) =>
       run(async () => {

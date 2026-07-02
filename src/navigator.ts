@@ -58,6 +58,9 @@ export interface FindSelector {
 
 export interface FindOpts {
   limit?: number;
+  /** JSON Pointer prefix: only nodes at/under it are hits — checked BEFORE the
+   *  limit is consumed, so out-of-scope matches never eat the budget. */
+  within?: string;
 }
 
 export interface FindHit {
@@ -167,12 +170,16 @@ export class Navigator {
   /** Find nodes matching ALL provided selector fields (exact `type`, `tag` membership, glob `pathPattern`). */
   find(selector: FindSelector, opts: FindOpts = {}): FindHit[] {
     const limit = opts.limit ?? DEFAULT_LIMIT;
+    const within = opts.within;
     const hits: FindHit[] = [];
     const visit = (id: NodeId): void => {
       if (hits.length >= limit) return;
       const node = this.tree.get(id)!;
       if (this.matches(node, selector)) {
-        hits.push({ id: node.id, path: this.addressing.pathOf(node.id), type: node.type });
+        const path = this.addressing.pathOf(node.id);
+        if (within === undefined || path === within || path.startsWith(within + "/")) {
+          hits.push({ id: node.id, path, type: node.type });
+        }
       }
       for (const cid of node.childIds) {
         if (hits.length >= limit) break;
