@@ -8,7 +8,9 @@ export default defineConfig({
   platform: "node",
   target: "node20",
   dts: true,
-  splitting: true, // shared code goes into chunks instead of being duplicated per entry
+  // No code splitting: hash-named chunk-*.js files would be importable through
+  // the "./*" exports map, becoming accidental public API. Duplication is fine.
+  splitting: false,
   sourcemap: true,
   clean: true,
 });

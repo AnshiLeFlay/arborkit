@@ -9,8 +9,8 @@ const repoRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const work = mkdtempSync(join(tmpdir(), "arbor-m11-pack-"));
 
 const SMOKE = `
-import { ArtifactTree, Addressing, EventLog, Mutator, makeToolset, sizeBasedDecision, SeqIdGen, SystemClock, serializeArtifact, restoreArtifact, MemoryStorage, MemoryVectorIndex } from "arbor";
-import { Replay } from "arbor/replay";
+import { ArtifactTree, Addressing, EventLog, Mutator, makeToolset, sizeBasedDecision, SeqIdGen, SystemClock, serializeArtifact, restoreArtifact, MemoryStorage, MemoryVectorIndex } from "arborkit";
+import { Replay } from "arborkit/replay";
 
 const deps = { idGen: new SeqIdGen(), clock: new SystemClock(), decision: sizeBasedDecision(1) };
 const tree = ArtifactTree.fromJson({ pages: {} }, deps);
