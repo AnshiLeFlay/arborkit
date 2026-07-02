@@ -27,3 +27,4 @@ export * from "./replay";
 export * from "./delta";
 export * from "./delta-storage";
 export * from "./toolset";
+export * from "./arbor";
