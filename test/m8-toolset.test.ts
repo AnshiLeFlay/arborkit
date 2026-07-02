@@ -31,7 +31,7 @@ describe("M8 toolset integration", () => {
 
     // can read brandFacts globally (readScope unset)
     const facts = await writer.find({ tag: "brand-fact:price" });
-    expect(facts.ok && facts.value.map((h) => h.path)).toEqual(["/brandFacts/price"]);
+    expect(facts.ok && facts.value.hits.map((h) => h.path)).toEqual(["/brandFacts/price"]);
 
     // can write its own page
     const ins = await writer.patch({ path: "/pages/home" }, { op: "insert", key: "title", value: "Welcome" });

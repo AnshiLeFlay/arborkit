@@ -70,6 +70,13 @@ export interface FindHit {
   type?: string;
 }
 
+export interface FindResult {
+  hits: FindHit[];
+  /** True when the walk stopped at `limit` — there MAY be more matches (an exact-fit
+   *  final hit also reports true). */
+  truncated: boolean;
+}
+
 function previewOf(node: ArbNode): string {
   if (node.kind === "leaf") {
     const s = JSON.stringify(node.content);
@@ -169,12 +176,16 @@ export class Navigator {
   }
 
   /** Find nodes matching ALL provided selector fields (exact `type`, `tag` membership, glob `pathPattern`). */
-  find(selector: FindSelector, opts: FindOpts = {}): FindHit[] {
+  find(selector: FindSelector, opts: FindOpts = {}): FindResult {
     const limit = opts.limit ?? DEFAULT_LIMIT;
     const within = opts.within;
     const hits: FindHit[] = [];
+    let truncated = false;
     const visit = (id: NodeId): void => {
-      if (hits.length >= limit) return;
+      if (hits.length >= limit) {
+        truncated = true;
+        return;
+      }
       const node = this.tree.get(id)!;
       if (this.matches(node, selector)) {
         const path = this.addressing.pathOf(node.id);
@@ -183,11 +194,14 @@ export class Navigator {
         }
       }
       for (const cid of node.childIds) {
-        if (hits.length >= limit) break;
+        if (hits.length >= limit) {
+          truncated = true;
+          break;
+        }
         visit(cid);
       }
     };
     visit(this.tree.rootIdValue());
-    return hits;
+    return { hits, truncated };
   }
 }

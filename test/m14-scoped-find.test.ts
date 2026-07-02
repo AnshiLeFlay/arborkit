@@ -30,14 +30,14 @@ describe("M14 scoped find", () => {
     const r = await ts.find({ pathPattern: "/**" }, { limit: 3 });
     expect(r.ok).toBe(true);
     // pre-fix: [] — the limit was consumed by /a's out-of-scope hits, then filtered away
-    if (r.ok) expect(r.value.map((h) => h.path).sort()).toEqual(["/scoped", "/scoped/hit1", "/scoped/hit2"]);
+    if (r.ok) expect(r.value.hits.map((h) => h.path).sort()).toEqual(["/scoped", "/scoped/hit1", "/scoped/hit2"]);
   });
 
   it("unscoped find is unchanged (within undefined)", async () => {
     const s = setup();
     const ts = makeToolset({ tree: s.tree, addressing: s.addressing, log: s.log, mutator: s.mutator });
     const r = await ts.find({ pathPattern: "/scoped/*" });
-    if (r.ok) expect(r.value.map((h) => h.path).sort()).toEqual(["/scoped/hit1", "/scoped/hit2"]);
+    if (r.ok) expect(r.value.hits.map((h) => h.path).sort()).toEqual(["/scoped/hit1", "/scoped/hit2"]);
   });
 
   it("caller within narrows INSIDE readScope; outside readScope → SCOPE_VIOLATION", async () => {
@@ -48,7 +48,7 @@ describe("M14 scoped find", () => {
     );
     const narrow = await ts.find({ pathPattern: "/**" }, { within: "/scoped/hit1" });
     expect(narrow.ok).toBe(true);
-    if (narrow.ok) expect(narrow.value.map((h) => h.path)).toEqual(["/scoped/hit1"]);
+    if (narrow.ok) expect(narrow.value.hits.map((h) => h.path)).toEqual(["/scoped/hit1"]);
     const escape = await ts.find({ pathPattern: "/**" }, { within: "/a" });
     expect(escape.ok).toBe(false);
     if (!escape.ok) expect(escape.error.code).toBe("SCOPE_VIOLATION");
@@ -58,6 +58,6 @@ describe("M14 scoped find", () => {
     const s = setup();
     const ts = makeToolset({ tree: s.tree, addressing: s.addressing, log: s.log, mutator: s.mutator });
     const r = await ts.find({ pathPattern: "/**" }, { within: "/scoped" });
-    if (r.ok) expect(r.value.map((h) => h.path).sort()).toEqual(["/scoped", "/scoped/hit1", "/scoped/hit2"]);
+    if (r.ok) expect(r.value.hits.map((h) => h.path).sort()).toEqual(["/scoped", "/scoped/hit1", "/scoped/hit2"]);
   });
 });

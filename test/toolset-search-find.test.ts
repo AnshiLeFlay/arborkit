@@ -30,7 +30,7 @@ describe("Toolset.find", () => {
     mutator.insert({ path: "/b" }, "y", "2", { tags: ["t"] });
     const r = await toolset.find({ tag: "t" });
     expect(r.ok).toBe(true);
-    if (r.ok) expect(r.value.map((h) => h.path)).toEqual(["/a/x"]);
+    if (r.ok) expect(r.value.hits.map((h) => h.path)).toEqual(["/a/x"]);
   });
 });
 

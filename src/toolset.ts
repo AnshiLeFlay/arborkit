@@ -11,7 +11,7 @@ import {
   type GetResult,
   type FindSelector,
   type FindOpts,
-  type FindHit,
+  type FindResult,
 } from "./navigator";
 import type { SearchOpts, SearchResult } from "./semantic-index";
 import { type Ref, ArborError, ScopeViolationError, InvalidOpError, NodeNotFoundError } from "./errors";
@@ -43,12 +43,19 @@ export interface ToolsetBinding {
   readScope?: string;
 }
 
+export interface PatchResult {
+  id: NodeId;
+  path: string;
+  /** The affected node's version AFTER the op (remove: the parent's). Feed into the next ifVersion. */
+  version: number;
+}
+
 export interface Toolset {
   describe(ref?: Ref, opts?: DescribeOpts): Promise<ToolResult<DescribeResult>>;
   get(ref: Ref, opts?: GetOpts): Promise<ToolResult<GetResult>>;
-  find(selector: FindSelector, opts?: FindOpts): Promise<ToolResult<FindHit[]>>;
+  find(selector: FindSelector, opts?: FindOpts): Promise<ToolResult<FindResult>>;
   search(query: string, opts?: SearchOpts): Promise<ToolResult<SearchResult>>;
-  patch(ref: Ref, op: PatchOp): Promise<ToolResult<{ id?: NodeId }>>;
+  patch(ref: Ref, op: PatchOp): Promise<ToolResult<PatchResult>>;
   history(ref?: Ref, opts?: { limit?: number }): Promise<ToolResult<MutationEvent[]>>;
 }
 
@@ -118,20 +125,37 @@ export function makeToolset(deps: ToolsetDeps, binding: ToolsetBinding = {}): To
       }),
 
     patch: (ref, op) =>
-      run<{ id?: NodeId }>(() => {
+      run<PatchResult>(() => {
         const common = { owner: binding.owner, writeScope: binding.writeScope, ifVersion: op.ifVersion };
+        const resolve = (r: Ref) => {
+          const node = "id" in r ? addressing.byId(r.id) : addressing.byPath(r.path);
+          if (!node) throw new NodeNotFoundError(r);
+          return node;
+        };
         switch (op.op) {
-          case "set":
+          case "set": {
             deps.mutator.set(ref, op.value, common);
-            return {};
-          case "insert":
-            return { id: deps.mutator.insert(ref, op.key, op.value, common) };
-          case "remove":
+            const node = resolve(ref);
+            return { id: node.id, path: addressing.pathOf(node.id), version: node.meta.version };
+          }
+          case "insert": {
+            const id = deps.mutator.insert(ref, op.key, op.value, common);
+            const node = tree.get(id)!;
+            return { id, path: addressing.pathOf(id), version: node.meta.version };
+          }
+          case "remove": {
+            const node = resolve(ref);
+            const removed = { id: node.id, path: addressing.pathOf(node.id) };
+            const parentId = node.parentId;
             deps.mutator.remove(ref, common);
-            return {};
-          case "move":
+            const parent = parentId !== null ? tree.get(parentId) : undefined;
+            return { id: removed.id, path: removed.path, version: parent?.meta.version ?? 0 };
+          }
+          case "move": {
+            const node = resolve(ref);
             deps.mutator.move(ref, op.to, op.key, common);
-            return {};
+            return { id: node.id, path: addressing.pathOf(node.id), version: node.meta.version };
+          }
         }
       }),
 

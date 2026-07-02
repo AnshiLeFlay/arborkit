@@ -68,7 +68,7 @@ console.log("1. scaffolded:", JSON.stringify(tree.toJson()));
 // 4. A content-writer agent, scoped to its own page, reads a brand fact then writes.
 const pricer = makeToolset({ tree, addressing, log, mutator, index }, { owner: "writer:pricing", writeScope: "/site/pages/pricing" });
 const facts = await pricer.find({ tag: "brand-fact" });
-console.log("2. pricing writer can read brand facts:", facts.ok && facts.value.map((h) => h.path));
+console.log("2. pricing writer can read brand facts:", facts.ok && facts.value.hits.map((h) => h.path));
 await pricer.patch({ path: "/site/pages/pricing" }, { op: "set", value: { title: "Pricing", body: "plans and cost" } });
 
 // A write outside its scope is refused as a structured error (no throw).

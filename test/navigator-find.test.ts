@@ -25,7 +25,7 @@ describe("Navigator.find", () => {
     mutator.insert({ path: "/items" }, "x", { v: 1 }, { type: "Widget" });
     mutator.insert({ path: "/items" }, "y", { v: 2 }, { type: "Widget" });
     mutator.insert({ path: "/items" }, "z", { v: 3 }, { type: "Other" });
-    const hits = nav.find({ type: "Widget" });
+    const hits = nav.find({ type: "Widget" }).hits;
     expect(hits.map((h) => h.path).sort()).toEqual(["/items/x", "/items/y"]);
     expect(hits.every((h) => h.type === "Widget")).toBe(true);
   });
@@ -34,13 +34,13 @@ describe("Navigator.find", () => {
     const { mutator, nav } = makeAll({ facts: {} });
     mutator.insert({ path: "/facts" }, "price", "2990", { tags: ["brand-fact:price"] });
     mutator.insert({ path: "/facts" }, "name", "Acme", { tags: ["brand-fact:name"] });
-    const hits = nav.find({ tag: "brand-fact:price" });
+    const hits = nav.find({ tag: "brand-fact:price" }).hits;
     expect(hits.map((h) => h.path)).toEqual(["/facts/price"]);
   });
 
   it("finds nodes by glob pathPattern", () => {
     const { nav } = makeAll({ pages: { home: { t: 1 }, about: { t: 2 } } });
-    const hits = nav.find({ pathPattern: "/pages/*" });
+    const hits = nav.find({ pathPattern: "/pages/*" }).hits;
     expect(hits.map((h) => h.path).sort()).toEqual(["/pages/about", "/pages/home"]);
   });
 
@@ -48,7 +48,7 @@ describe("Navigator.find", () => {
     const { mutator, nav } = makeAll({ pages: {} });
     mutator.insert({ path: "/pages" }, "a", { v: 1 }, { type: "Page", tags: ["draft"] });
     mutator.insert({ path: "/pages" }, "b", { v: 2 }, { type: "Page" });
-    const hits = nav.find({ type: "Page", tag: "draft" });
+    const hits = nav.find({ type: "Page", tag: "draft" }).hits;
     expect(hits.map((h) => h.path)).toEqual(["/pages/a"]);
   });
 
@@ -57,6 +57,6 @@ describe("Navigator.find", () => {
     mutator.insert({ path: "/items" }, "a", 1, { type: "T" });
     mutator.insert({ path: "/items" }, "b", 2, { type: "T" });
     mutator.insert({ path: "/items" }, "c", 3, { type: "T" });
-    expect(nav.find({ type: "T" }, { limit: 2 }).length).toBe(2);
+    expect(nav.find({ type: "T" }, { limit: 2 }).hits.length).toBe(2);
   });
 });

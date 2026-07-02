@@ -31,19 +31,19 @@ describe("M4 navigator integration", () => {
 
   it("find by type returns the page nodes", () => {
     const { nav } = setup();
-    const hits = nav.find({ type: "PageContent" });
+    const hits = nav.find({ type: "PageContent" }).hits;
     expect(hits.map((h) => h.path).sort()).toEqual(["/pages/about", "/pages/home"]);
   });
 
   it("find by tag returns the brand fact", () => {
     const { nav } = setup();
-    const hits = nav.find({ tag: "brand-fact:price" });
+    const hits = nav.find({ tag: "brand-fact:price" }).hits;
     expect(hits.map((h) => h.path)).toEqual(["/brandFacts/price"]);
   });
 
   it("find by glob returns the pages", () => {
     const { nav } = setup();
-    const hits = nav.find({ pathPattern: "/pages/*" });
+    const hits = nav.find({ pathPattern: "/pages/*" }).hits;
     expect(hits.map((h) => h.path).sort()).toEqual(["/pages/about", "/pages/home"]);
   });
 

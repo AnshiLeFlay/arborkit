@@ -46,8 +46,8 @@ describe("M14 capstone: adversarial agent traffic", () => {
     const r4 = await agent.find({ pathPattern: "/**" }, { limit: 2 });
     expect(r4.ok).toBe(true);
     if (r4.ok) {
-      expect(r4.value.length).toBe(2);
-      for (const h of r4.value) expect(h.path === "/work" || h.path.startsWith("/work/")).toBe(true);
+      expect(r4.value.hits.length).toBe(2);
+      for (const h of r4.value.hits) expect(h.path === "/work" || h.path.startsWith("/work/")).toBe(true);
     }
 
     // 5. history the agent reads cannot be used to corrupt the log

@@ -76,7 +76,7 @@ describe("M9 content-site scenario (full stack)", () => {
     const pricer = w.tools({ owner: "writer:pricing", writeScope: "/site/pages/pricing" });
     const facts = await pricer.find({ tag: "brand-fact" });
     expect(facts.ok).toBe(true);
-    if (facts.ok) expect(facts.value.length).toBe(2);
+    if (facts.ok) expect(facts.value.hits.length).toBe(2);
     expect(
       (await pricer.patch({ path: "/site/pages/pricing" }, { op: "set", value: { title: "Pricing", body: "plans and cost" } })).ok,
     ).toBe(true);
@@ -96,7 +96,7 @@ describe("M9 content-site scenario (full stack)", () => {
     const pages = await editor.find({ tag: "page" });
     expect(pages.ok).toBe(true);
     if (pages.ok) {
-      expect(pages.value.map((h) => h.path).sort()).toEqual([
+      expect(pages.value.hits.map((h) => h.path).sort()).toEqual([
         "/site/pages/about",
         "/site/pages/home",
         "/site/pages/pricing",
