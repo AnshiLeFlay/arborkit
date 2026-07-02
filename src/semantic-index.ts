@@ -144,7 +144,10 @@ export class SemanticIndex {
     return this.stale.size;
   }
 
-  /** Embed every stale node (one batch), upsert vectors, mark fresh, clear the processed ids. */
+  /** Embed every stale node (one batch), upsert vectors, mark fresh, clear the processed ids.
+   *  Interleave-safe: mutations landing during the embed await are respected — a node
+   *  removed mid-flight is dropped (never resurrected), and a node whose text changed
+   *  stays queued for the next pass instead of being marked fresh for the old text. */
   async reindex(): Promise<void> {
     // First: drain deferred removals (HOLE 2 fix — removals queued by sync hooks).
     for (const id of this.pendingRemoval) this.vectors.remove(id);
@@ -152,15 +155,20 @@ export class SemanticIndex {
 
     const ids = [...this.stale];
     if (ids.length === 0) return;
+    const completed = new Set<NodeId>();
     const items: { id: NodeId; text: string; hash: string }[] = [];
     for (const id of ids) {
       const node = this.tree.get(id);
-      if (!node) continue;
+      if (!node) {
+        completed.add(id);
+        continue;
+      }
       // HOLE 1 fix: guard-aware reindex — suppress shards that belong to a typed
       // ancestor's embedding unit.
       if (this.isSuppressedShard(node)) {
         node.meta.embedding = { state: "none" };
         this.vectors.remove(id);
+        completed.add(id);
         continue;
       }
       const value = this.tree.toJson(id);
@@ -169,19 +177,35 @@ export class SemanticIndex {
       if (text === null) {
         node.meta.embedding = { state: "none" };
         this.vectors.remove(id);
+        completed.add(id);
         continue;
       }
       items.push({ id, text, hash: textHash(text) });
     }
     if (items.length > 0) {
       const embedded = await this.embedding.embed(items.map((it) => it.text));
-      this.vectors.upsert(items.map((it, i) => ({ nodeId: it.id, vector: embedded[i] })));
-      for (const it of items) {
-        const node = this.tree.get(it.id)!;
+      // Mutations may have landed during the await — re-validate every item
+      // against the live tree before trusting the embedded batch.
+      const upserts: { nodeId: NodeId; vector: number[] }[] = [];
+      for (const [i, it] of items.entries()) {
+        const node = this.tree.get(it.id);
+        if (!node) {
+          this.vectors.remove(it.id); // removed mid-flight — do not resurrect
+          completed.add(it.id);
+          continue;
+        }
+        if (node.meta.embedding.state === "stale" && node.meta.embedding.textHash !== it.hash) {
+          continue; // superseded mid-flight — leave queued for the next pass
+        }
+        upserts.push({ nodeId: it.id, vector: embedded[i] });
         node.meta.embedding = { state: "fresh", textHash: it.hash };
+        completed.add(it.id);
       }
+      if (upserts.length > 0) this.vectors.upsert(upserts);
     }
-    for (const id of ids) this.stale.delete(id);
+    for (const id of ids) {
+      if (completed.has(id)) this.stale.delete(id);
+    }
   }
 
   private snippetOf(value: Json): string {
