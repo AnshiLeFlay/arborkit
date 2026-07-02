@@ -10,6 +10,8 @@ import { sizeBasedDecision } from "../src/decompose";
 import { SeqIdGen } from "../src/ids";
 import { FixedClock } from "../src/clock";
 import type { Json } from "../src/types";
+import { MemoryDeltaStorage } from "../src/delta-storage";
+import { persistCheckpoint, persistDelta, restoreFromDelta } from "../src/delta";
 
 /** Embedder whose FIRST batch blocks until gate() is called — lets a test land
  *  mutations "during" the embed await. */
@@ -83,5 +85,30 @@ describe("M14 reindex interleaving", () => {
     // the forever-miss case: the same text returns → must be re-marked stale, not skipped
     s.mutator.set({ path: "/a" }, "string-text");
     expect(node.meta.embedding.state).toBe("stale");
+  });
+
+  it("delta-restored stale nodes (no textHash) are embedded, marked fresh, and searchable", async () => {
+    // Build a run, checkpoint it, journal one edit, restore — the touched node
+    // comes back { state: "stale" } WITHOUT a textHash (restoreFromDelta's hook).
+    const src = setup({ docs: {} }, new GatedEmbedder());
+    const store = new MemoryDeltaStorage();
+    const hw = await persistCheckpoint(store, src.tree, src.log, src.vectors);
+    src.mutator.set({ path: "/docs" }, { a: "restored-text" });
+    await persistDelta(store, src.log, hw);
+
+    const deps = { idGen: new SeqIdGen(), clock: new FixedClock(0), decision: sizeBasedDecision(1) };
+    const vectors = new MemoryVectorIndex();
+    const r = (await restoreFromDelta(store, deps, vectors))!;
+    const addressing = new Addressing(r.tree);
+    const embedder = new GatedEmbedder();
+    embedder.gate(); // don't block — gate the (unused) first batch immediately
+    const index = new SemanticIndex(r.tree, addressing, embedder, vectors);
+
+    expect(index.staleCount()).toBeGreaterThan(0); // restore seeded the stale queue
+    await index.reindex();
+    expect(index.staleCount()).toBe(0); // pre-fix: never drains
+    const leaf = addressing.byPath("/docs/a")!;
+    expect(leaf.meta.embedding.state).toBe("fresh"); // pre-fix: stuck "stale" forever
+    expect(vectors.has(leaf.id)).toBe(true);
   });
 });

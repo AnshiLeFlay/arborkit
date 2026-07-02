@@ -198,7 +198,13 @@ export class SemanticIndex {
         // text we embedded. "none" (text became null / became a suppressed shard
         // mid-flight) means its removal is already queued — complete without
         // upserting; any other divergence (new hash) stays queued for the next pass.
-        if (node.meta.embedding.state !== "stale" || node.meta.embedding.textHash !== it.hash) {
+        // A stale node with NO textHash (a delta-restored node — restoreFromDelta
+        // marks {state:"stale"} without a hash) cannot have been touched during the
+        // await: any mid-flight change writes a concrete hash ("stale"), "none", or
+        // removes the node. So an undefined hash means our pre-await snapshot is
+        // current — trust the batch.
+        const cur = node.meta.embedding;
+        if (cur.state !== "stale" || (cur.textHash !== undefined && cur.textHash !== it.hash)) {
           if (node.meta.embedding.state === "none") completed.add(it.id);
           continue;
         }
