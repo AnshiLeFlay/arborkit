@@ -1,4 +1,5 @@
 import type { Json, NodeId } from "./types";
+import { InvalidOpError } from "./errors";
 
 export type OpKind = "set" | "insert" | "remove" | "move";
 
@@ -71,14 +72,22 @@ export class EventLog {
     return this.baseSeq + this.events.length;
   }
 
-  /** Drop events past absolute `length` — used to roll back a failed transaction. */
+  /** Drop events past absolute `length` — used to roll back a failed transaction.
+   *  Throws below the compaction floor: that history is gone and the log cannot roll
+   *  back past it — `compactTo` must never run inside a transaction. */
   truncateTo(length: number): void {
-    this.events.length = Math.max(0, length - this.baseSeq);
+    if (length < this.baseSeq) {
+      throw new InvalidOpError(
+        `cannot truncate to ${length}: events before ${this.baseSeq} were compacted away (compactTo must not run inside a transaction)`,
+      );
+    }
+    this.events.length = length - this.baseSeq;
   }
 
   /** Compaction: drop every retained event with seq < `floorSeq` (history before it
    *  becomes unreconstructable). `floorSeq` is clamped to [baseSeq, length()].
-   *  Returns the number of events dropped. */
+   *  Returns the number of events dropped. Must NOT be called inside a Mutator
+   *  transaction (rollback would need the dropped events). */
   compactTo(floorSeq: number): number {
     const floor = Math.max(this.baseSeq, Math.min(floorSeq, this.length()));
     const drop = floor - this.baseSeq;
