@@ -194,8 +194,13 @@ export class SemanticIndex {
           completed.add(it.id);
           continue;
         }
-        if (node.meta.embedding.state === "stale" && node.meta.embedding.textHash !== it.hash) {
-          continue; // superseded mid-flight — leave queued for the next pass
+        // Positive trust check: mark fresh ONLY if the node still awaits exactly the
+        // text we embedded. "none" (text became null / became a suppressed shard
+        // mid-flight) means its removal is already queued — complete without
+        // upserting; any other divergence (new hash) stays queued for the next pass.
+        if (node.meta.embedding.state !== "stale" || node.meta.embedding.textHash !== it.hash) {
+          if (node.meta.embedding.state === "none") completed.add(it.id);
+          continue;
         }
         upserts.push({ nodeId: it.id, vector: embedded[i] });
         node.meta.embedding = { state: "fresh", textHash: it.hash };

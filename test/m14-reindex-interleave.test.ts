@@ -67,4 +67,21 @@ describe("M14 reindex interleaving", () => {
     await s.index.reindex(); // drain pendingRemoval
     expect(s.vectors.size()).toBe(1); // no resurrected vector for the removed node
   });
+
+  it("a node whose text becomes null during the embed await is not marked falsely fresh", async () => {
+    const embedder = new GatedEmbedder();
+    const s = setup({ a: null }, embedder);
+    s.mutator.set({ path: "/a" }, "string-text"); // string leaf → embeddable → stale
+    const p = s.index.reindex(); // suspends inside embed
+    s.mutator.set({ path: "/a" }, 42); // number leaf → embedding text null → state "none", removal queued
+    embedder.gate();
+    await p;
+    const node = s.addressing.byPath("/a")!;
+    expect(node.meta.embedding.state).toBe("none"); // pre-fix: "fresh" with the OLD text's hash
+    await s.index.reindex(); // drain the queued removal
+    expect(s.vectors.has(node.id)).toBe(false);
+    // the forever-miss case: the same text returns → must be re-marked stale, not skipped
+    s.mutator.set({ path: "/a" }, "string-text");
+    expect(node.meta.embedding.state).toBe("stale");
+  });
 });

@@ -39,4 +39,25 @@ describe("M14 scoped find", () => {
     const r = await ts.find({ pathPattern: "/scoped/*" });
     if (r.ok) expect(r.value.map((h) => h.path).sort()).toEqual(["/scoped/hit1", "/scoped/hit2"]);
   });
+
+  it("caller within narrows INSIDE readScope; outside readScope → SCOPE_VIOLATION", async () => {
+    const s = setup();
+    const ts = makeToolset(
+      { tree: s.tree, addressing: s.addressing, log: s.log, mutator: s.mutator },
+      { readScope: "/scoped" },
+    );
+    const narrow = await ts.find({ pathPattern: "/**" }, { within: "/scoped/hit1" });
+    expect(narrow.ok).toBe(true);
+    if (narrow.ok) expect(narrow.value.map((h) => h.path)).toEqual(["/scoped/hit1"]);
+    const escape = await ts.find({ pathPattern: "/**" }, { within: "/a" });
+    expect(escape.ok).toBe(false);
+    if (!escape.ok) expect(escape.error.code).toBe("SCOPE_VIOLATION");
+  });
+
+  it("caller within is honored on an unscoped toolset", async () => {
+    const s = setup();
+    const ts = makeToolset({ tree: s.tree, addressing: s.addressing, log: s.log, mutator: s.mutator });
+    const r = await ts.find({ pathPattern: "/**" }, { within: "/scoped" });
+    if (r.ok) expect(r.value.map((h) => h.path).sort()).toEqual(["/scoped", "/scoped/hit1", "/scoped/hit2"]);
+  });
 });

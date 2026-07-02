@@ -59,4 +59,13 @@ describe("M14 aliasing hygiene", () => {
     const r2 = await ts.history();
     if (r2.ok) expect(r2.value[0]!.after).toEqual({ a: 1 });
   });
+
+  it("mutating the caller's tags array after set() changes neither the node nor history", () => {
+    const s = setup({ x: null });
+    const t = ["draft"];
+    s.mutator.set({ path: "/x" }, "v", { tags: t });
+    t.push("INJECTED");
+    expect(s.addressing.byPath("/x")!.tags).toEqual(["draft"]);
+    expect(s.log.at(0)!.tags).toEqual(["draft"]);
+  });
 });

@@ -104,7 +104,12 @@ export function makeToolset(deps: ToolsetDeps, binding: ToolsetBinding = {}): To
       }),
 
     find: (selector, opts) =>
-      run(() => navigator.find(selector, { ...opts, within: binding.readScope })),
+      run(() => {
+        if (binding.readScope !== undefined && opts?.within !== undefined && !within(opts.within, binding.readScope)) {
+          throw new ScopeViolationError(opts.within, binding.readScope);
+        }
+        return navigator.find(selector, { ...opts, within: opts?.within ?? binding.readScope });
+      }),
 
     search: (query, opts = {}) =>
       run(async () => {

@@ -80,10 +80,10 @@ export class Mutator {
     this.deps.validate?.({ node, proposed: cloned, type, op: "set" });
     const before = this.tree.toJson(node.id);
     const typeBefore = node.type;
-    const tagsBefore = node.tags ?? [];
+    const tagsBefore = [...(node.tags ?? [])];
     const orphaned = this.tree.descendantIds(node.id);
     this.tree.replaceValue(node.id, cloned, type, clearType);
-    if (opts.tags !== undefined) node.tags = opts.tags;
+    if (opts.tags !== undefined) node.tags = [...opts.tags];
     this.bump(node, opts.owner);
     this.deps.onChange?.(node);
     if (this.deps.onChange) {
@@ -108,7 +108,7 @@ export class Mutator {
       nodeTypeBefore: typeBefore ?? null,
       nodeType: type ?? null,
       tagsBefore,
-      tags: node.tags ?? [],
+      tags: [...(node.tags ?? [])],
       actor: opts.owner,
       ts: this.deps.clock.now(),
     });
@@ -125,7 +125,7 @@ export class Mutator {
     this.deps.validate?.({ node: null, proposed: cloned, type, op: "insert" });
     const newId = this.tree.insertChild(parent.id, keyOrIndex, cloned, type);
     const child = this.tree.get(newId)!;
-    if (opts.tags !== undefined) child.tags = opts.tags;
+    if (opts.tags !== undefined) child.tags = [...opts.tags];
     this.bump(parent, opts.owner);
     this.deps.onChange?.(child);
     if (this.deps.onChange) {
@@ -142,7 +142,7 @@ export class Mutator {
       path: this.addressing.pathOf(newId),
       after: cloned,
       nodeType: child.type ?? null,
-      tags: child.tags ?? [],
+      tags: [...(child.tags ?? [])],
       actor: opts.owner,
       ts: this.deps.clock.now(),
     });
@@ -172,7 +172,7 @@ export class Mutator {
       path,
       before,
       nodeTypeBefore: node.type ?? null,
-      tagsBefore: node.tags ?? [],
+      tagsBefore: [...(node.tags ?? [])],
       actor: opts.owner,
       ts: this.deps.clock.now(),
     });
