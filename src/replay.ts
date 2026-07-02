@@ -58,26 +58,58 @@ export class Replay {
     return this.log.since(vA).filter((e) => e.seq < vB);
   }
 
-  /** The node's type as of `version`: a string (typed), null (untyped/absent), or
-   *  undefined (unknown/unchanged since `version` — leave the current type alone). */
-  private typeAt(path: string, version: number): string | null | undefined {
+  /** The node's {type, tags} as of `version`, by scanning later events on its path.
+   *  Move-aware: if the version-`version` occupant was moved away, follow it to its
+   *  new path and keep scanning — its type/tags travel with it. If the scan exhausts
+   *  on a FOLLOWED path, the occupant is the live node there — read it directly
+   *  ("keep current" would read whatever now sits at the original path).
+   *  type: string | null (untyped/absent) | undefined (unknown — keep current).
+   *  tags: string[] ([] = untagged) | undefined (unknown/pre-M14 — keep current).
+   *  Limitation (same as pre-M14): array-index paths can mis-resolve across sibling
+   *  index shifts; exact for object paths. */
+  private stateAt(
+    path: string,
+    version: number,
+    addressing: Addressing,
+  ): { type: string | null | undefined; tags: string[] | undefined } {
     const total = this.log.length();
+    let p = path;
     for (let seq = Math.max(version, this.log.baseSeqValue()); seq < total; seq++) {
       const e = this.log.at(seq)!;
-      if (e.path !== path) continue;
-      if (e.kind === "set" || e.kind === "remove") {
-        return e.nodeTypeBefore === undefined ? undefined : e.nodeTypeBefore;
+      if (e.kind === "move") {
+        if (e.fromPath === p) {
+          p = e.toPath ?? p; // occupant moved away — follow it
+          continue;
+        }
+        if (e.toPath === p) return { type: null, tags: [] }; // something ELSE moved in → vacant at `version`
+        continue;
       }
-      if (e.kind === "insert") return null;
+      if (e.path !== p) continue;
+      if (e.kind === "set" || e.kind === "remove") {
+        return {
+          type: e.nodeTypeBefore === undefined ? undefined : e.nodeTypeBefore,
+          tags: e.tagsBefore, // absent (pre-M14) → undefined = keep current
+        };
+      }
+      if (e.kind === "insert") return { type: null, tags: [] }; // node did not exist at `version`
     }
-    return undefined;
+    if (p !== path) {
+      // Followed through moves and nothing later touched the occupant: it is the
+      // live node at `p` — its type/tags are the version-`version` answer.
+      const live = addressing.byPath(p);
+      return { type: live?.type ?? null, tags: live?.tags ?? [] };
+    }
+    return { type: undefined, tags: undefined }; // untouched since `version` — keep current
   }
 
-  /** Restore the node at `ref` to its value AND type as of `toVersion`, as a new live mutation. */
+  /** Restore the node at `ref` to its value, type, AND tags as of `toVersion`, as a new live mutation. */
   revert(mutator: Mutator, addressing: Addressing, ref: Ref, toVersion: number): void {
     const path = "id" in ref ? addressing.pathOf(ref.id) : ref.path;
     const past = this.getAt(path, toVersion);
-    const pastType = this.typeAt(path, toVersion);
-    mutator.set({ path }, past ?? null, pastType === undefined ? {} : { type: pastType });
+    const { type, tags } = this.stateAt(path, toVersion, addressing);
+    const opts: { type?: string | null; tags?: string[] } = {};
+    if (type !== undefined) opts.type = type;
+    if (tags !== undefined) opts.tags = tags;
+    mutator.set({ path }, past ?? null, opts);
   }
 }
