@@ -188,7 +188,8 @@ export class ArtifactTree {
     if (parent.kind === "array") this.renumberArray(parentId);
   }
 
-  /** Move `id` under `newParentId` at `keyOrIndex`, preserving `id`. Renumbers affected arrays. */
+  /** Move `id` under `newParentId` at `keyOrIndex`, preserving `id`. Renumbers affected arrays.
+   *  ALL validation happens before any mutation — a rejected move leaves the tree untouched. */
   moveNode(id: NodeId, newParentId: NodeId, keyOrIndex: string | number): void {
     const node = this.nodes.get(id);
     if (!node) throw new InvalidOpError(`Unknown node: ${id}`);
@@ -196,6 +197,20 @@ export class ArtifactTree {
     const newParent = this.nodes.get(newParentId);
     if (!newParent) throw new InvalidOpError(`Unknown node: ${newParentId}`);
     if (newParent.kind === "leaf") throw new InvalidOpError("cannot move into a leaf node");
+    // Moving into itself or its own subtree would create a parent-chain cycle:
+    // toJson silently drops the subtree and pathOf never terminates.
+    let anc: NodeId | null = newParentId;
+    while (anc !== null) {
+      if (anc === id) throw new InvalidOpError("cannot move a node into itself or its own subtree");
+      anc = this.nodes.get(anc)?.parentId ?? null;
+    }
+    if (newParent.kind === "object") {
+      if (typeof keyOrIndex !== "string") throw new InvalidOpError("object move requires a string key");
+      // Mirrors insertChild: a duplicate key silently shadows the existing child.
+      if (newParent.childIds.some((cid) => cid !== id && this.nodes.get(cid)!.key === keyOrIndex)) {
+        throw new InvalidOpError(`key already exists: ${keyOrIndex}`);
+      }
+    }
 
     const oldParent = this.nodes.get(node.parentId)!;
     const oldIdx = oldParent.childIds.indexOf(id);
@@ -203,7 +218,6 @@ export class ArtifactTree {
     if (oldParent.kind === "array") this.renumberArray(oldParent.id);
 
     if (newParent.kind === "object") {
-      if (typeof keyOrIndex !== "string") throw new InvalidOpError("object move requires a string key");
       node.parentId = newParentId;
       node.key = keyOrIndex;
       newParent.childIds.push(id);
