@@ -10,6 +10,7 @@ const work = mkdtempSync(join(tmpdir(), "arbor-m11-pack-"));
 
 const SMOKE = `
 import { ArtifactTree, Addressing, EventLog, Mutator, makeToolset, sizeBasedDecision, SeqIdGen, SystemClock, serializeArtifact, restoreArtifact, MemoryStorage, MemoryVectorIndex } from "arborkit";
+import { createArbor } from "arborkit";
 import { Replay } from "arborkit/replay";
 
 const deps = { idGen: new SeqIdGen(), clock: new SystemClock(), decision: sizeBasedDecision(1) };
@@ -35,6 +36,9 @@ if (JSON.stringify(rtree.toJson()) !== JSON.stringify(tree.toJson())) throw new 
 const replay = new Replay(tree, log);
 const before = replay.getAt("/pages/home", 0);
 if (before !== undefined) throw new Error("expected node absent at v0");
+
+const a = createArbor({ initial: { x: 1 } });
+if (JSON.stringify(a.tree.toJson()) !== '{"x":1}') throw new Error("facade smoke failed");
 
 console.log("SMOKE_OK");
 `;
