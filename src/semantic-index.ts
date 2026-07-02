@@ -5,6 +5,7 @@ import type { TypeRegistry } from "./type-registry";
 import type { EmbeddingPort } from "./embedding-port";
 import type { VectorIndexPort } from "./vector-index-port";
 import { toEmbeddingText, textHash } from "./embedding-text";
+import { isWithin } from "./jsonpointer";
 
 export interface SearchOpts {
   k?: number;
@@ -242,7 +243,7 @@ export class SemanticIndex {
       const node = this.tree.get(hit.nodeId);
       if (!node) continue;
       const path = this.addressing.pathOf(node.id);
-      if (opts.under !== undefined && path !== opts.under && !path.startsWith(opts.under + "/")) continue;
+      if (opts.under !== undefined && !isWithin(path, opts.under)) continue;
       if (opts.type !== undefined && node.type !== opts.type) continue;
       if (opts.tag !== undefined && !(node.tags?.includes(opts.tag) ?? false)) continue;
       results.push({

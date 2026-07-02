@@ -22,9 +22,9 @@ export class NodeNotFoundError extends ArborError {
 export class ScopeViolationError extends ArborError {
   constructor(
     public readonly targetPath: string,
-    public readonly writeScope: string,
+    public readonly scope: string,
   ) {
-    super("SCOPE_VIOLATION", `Write outside scope: ${targetPath} not within ${writeScope}`);
+    super("SCOPE_VIOLATION", `Access outside scope: ${targetPath} (scope: ${scope})`);
   }
 }
 

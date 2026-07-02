@@ -4,6 +4,7 @@ import type { ArtifactTree } from "./artifact-tree";
 import type { Addressing } from "./addressing";
 import type { EventLog, OpKind } from "./event-log";
 import { type Ref, NodeNotFoundError, ScopeViolationError, StaleVersionError, InvalidOpError } from "./errors";
+import { isWithin } from "./jsonpointer";
 
 /** Optional validation hook. Throws to reject a mutation. M3 plugs Zod in here. */
 export type Validator = (input: { node: ArbNode | null; proposed: Json; type?: string; op: OpKind }) => void;
@@ -51,9 +52,7 @@ export class Mutator {
   private checkScope(node: ArbNode, writeScope?: string): void {
     if (writeScope === undefined) return;
     const path = this.addressing.pathOf(node.id);
-    if (path !== writeScope && !path.startsWith(writeScope + "/")) {
-      throw new ScopeViolationError(path, writeScope);
-    }
+    if (!isWithin(path, writeScope)) throw new ScopeViolationError(path, writeScope);
   }
 
   private checkVersion(node: ArbNode, ifVersion?: number): void {

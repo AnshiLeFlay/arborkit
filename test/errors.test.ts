@@ -20,7 +20,7 @@ describe("typed errors", () => {
     const e = new ScopeViolationError("/pages/1", "/pages/0");
     expect(e.code).toBe("SCOPE_VIOLATION");
     expect(e.targetPath).toBe("/pages/1");
-    expect(e.writeScope).toBe("/pages/0");
+    expect(e.scope).toBe("/pages/0");
   });
 
   it("StaleVersionError carries id, expected and actual", () => {

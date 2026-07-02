@@ -4,6 +4,7 @@ import type { Addressing } from "./addressing";
 import { type Ref, NodeNotFoundError } from "./errors";
 import { byteSize } from "./decompose";
 import { matchGlob } from "./path-glob";
+import { isWithin } from "./jsonpointer";
 
 const DEFAULT_LIMIT = 100;
 const PREVIEW_MAX = 50;
@@ -177,7 +178,7 @@ export class Navigator {
       const node = this.tree.get(id)!;
       if (this.matches(node, selector)) {
         const path = this.addressing.pathOf(node.id);
-        if (within === undefined || path === within || path.startsWith(within + "/")) {
+        if (isWithin(path, within)) {
           hits.push({ id: node.id, path, type: node.type });
         }
       }

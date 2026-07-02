@@ -14,6 +14,11 @@ export function buildPointer(segments: ReadonlyArray<string | number>): string {
   return "/" + segments.map((s) => encodeSegment(String(s))).join("/");
 }
 
+/** True when `path` is at or under `scope` (JSON Pointer prefix). Undefined scope = everywhere. */
+export function isWithin(path: string, scope: string | undefined): boolean {
+  return scope === undefined || path === scope || path.startsWith(scope + "/");
+}
+
 /** Parse a JSON Pointer into decoded segments. "" => [] (root). */
 export function parsePointer(pointer: string): string[] {
   if (pointer === "") return [];

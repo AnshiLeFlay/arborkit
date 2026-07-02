@@ -15,6 +15,7 @@ import {
 } from "./navigator";
 import type { SearchOpts, SearchResult } from "./semantic-index";
 import { type Ref, ArborError, ScopeViolationError, InvalidOpError, NodeNotFoundError } from "./errors";
+import { isWithin } from "./jsonpointer";
 import type { Json, NodeId } from "./types";
 
 /** Every toolset call returns this — errors are structured, never thrown across the agent boundary. */
@@ -51,16 +52,11 @@ export interface Toolset {
   history(ref?: Ref, opts?: { limit?: number }): Promise<ToolResult<MutationEvent[]>>;
 }
 
-/** path is within scope if scope is unset, equal, or an ancestor prefix. */
-function within(path: string, scope: string | undefined): boolean {
-  return scope === undefined || path === scope || path.startsWith(scope + "/");
-}
-
 /** An event is within scope if any of its recorded paths is within scope. */
 function eventWithinScope(e: MutationEvent, scope: string): boolean {
-  if (e.path !== undefined && within(e.path, scope)) return true;
-  if (e.toPath !== undefined && within(e.toPath, scope)) return true;
-  if (e.fromPath !== undefined && within(e.fromPath, scope)) return true;
+  if (e.path !== undefined && isWithin(e.path, scope)) return true;
+  if (e.toPath !== undefined && isWithin(e.toPath, scope)) return true;
+  if (e.fromPath !== undefined && isWithin(e.fromPath, scope)) return true;
   return false;
 }
 
@@ -85,7 +81,7 @@ export function makeToolset(deps: ToolsetDeps, binding: ToolsetBinding = {}): To
       run(() => {
         const target: Ref = ref ?? (binding.readScope !== undefined ? { path: binding.readScope } : { path: "" });
         const r = navigator.describe(target, opts);
-        if (!within(r.node.path, binding.readScope)) {
+        if (!isWithin(r.node.path, binding.readScope)) {
           throw new ScopeViolationError(r.node.path, binding.readScope!);
         }
         return r;
@@ -94,7 +90,7 @@ export function makeToolset(deps: ToolsetDeps, binding: ToolsetBinding = {}): To
     get: (ref, opts) =>
       run(() => {
         const r = navigator.get(ref, opts);
-        if (!within(r.path, binding.readScope)) {
+        if (!isWithin(r.path, binding.readScope)) {
           throw new ScopeViolationError(r.path, binding.readScope!);
         }
         // Deep-clone the WHOLE result: `content` (and `meta`) come from the live
@@ -105,7 +101,7 @@ export function makeToolset(deps: ToolsetDeps, binding: ToolsetBinding = {}): To
 
     find: (selector, opts) =>
       run(() => {
-        if (binding.readScope !== undefined && opts?.within !== undefined && !within(opts.within, binding.readScope)) {
+        if (binding.readScope !== undefined && opts?.within !== undefined && !isWithin(opts.within, binding.readScope)) {
           throw new ScopeViolationError(opts.within, binding.readScope);
         }
         return navigator.find(selector, { ...opts, within: opts?.within ?? binding.readScope });
@@ -114,7 +110,7 @@ export function makeToolset(deps: ToolsetDeps, binding: ToolsetBinding = {}): To
     search: (query, opts = {}) =>
       run(async () => {
         if (!deps.index) throw new InvalidOpError("no semantic index configured for this toolset");
-        if (binding.readScope !== undefined && opts.under !== undefined && !within(opts.under, binding.readScope)) {
+        if (binding.readScope !== undefined && opts.under !== undefined && !isWithin(opts.under, binding.readScope)) {
           throw new ScopeViolationError(opts.under, binding.readScope);
         }
         const under = opts.under ?? binding.readScope;
@@ -146,7 +142,7 @@ export function makeToolset(deps: ToolsetDeps, binding: ToolsetBinding = {}): To
           const node = "id" in ref ? addressing.byId(ref.id) : addressing.byPath(ref.path);
           if (!node) throw new NodeNotFoundError(ref);
           const path = addressing.pathOf(node.id);
-          if (!within(path, binding.readScope)) throw new ScopeViolationError(path, binding.readScope!);
+          if (!isWithin(path, binding.readScope)) throw new ScopeViolationError(path, binding.readScope!);
           const id = node.id;
           events = events.filter((e) => e.targetId === id);
         } else if (binding.readScope !== undefined) {
