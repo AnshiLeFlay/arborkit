@@ -24,4 +24,5 @@ export * from "./storage";
 export * from "./file-storage";
 export * from "./json-edit";
 export * from "./replay";
+export * from "./delta";
 export * from "./toolset";
