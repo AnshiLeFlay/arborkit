@@ -88,6 +88,7 @@ function assemble(
   log: EventLog,
   vectors: VectorIndexPort,
   clock: Clock,
+  hasCheckpoint: boolean,
 ): Arbor {
   const addressing = new Addressing(tree);
   const index = opts.embedding
@@ -99,6 +100,14 @@ function assemble(
   const mutator = new Mutator(tree, addressing, log, mdeps);
   const replay = new Replay(tree, log);
   let highWater = log.length(); // delta journal position (everything before is persisted/checkpointed)
+  let checkpointed = hasCheckpoint;
+
+  async function doCheckpoint(keepLast?: number): Promise<void> {
+    if (!opts.delta) throw new InvalidOpError("checkpoint(): no delta storage configured");
+    if (keepLast !== undefined) log.compactTo(log.length() - keepLast);
+    highWater = await persistCheckpoint(opts.delta, tree, log, vectors);
+    checkpointed = true;
+  }
 
   return {
     tree,
@@ -115,13 +124,14 @@ function assemble(
     },
     saveDelta: async () => {
       if (!opts.delta) throw new InvalidOpError("saveDelta(): no delta storage configured");
+      if (!checkpointed) {
+        // A journal with no checkpoint is unrestorable — snapshot instead.
+        await doCheckpoint();
+        return;
+      }
       highWater = await persistDelta(opts.delta, log, highWater);
     },
-    checkpoint: async (o) => {
-      if (!opts.delta) throw new InvalidOpError("checkpoint(): no delta storage configured");
-      if (o?.keepLast !== undefined) log.compactTo(log.length() - o.keepLast);
-      highWater = await persistCheckpoint(opts.delta, tree, log, vectors);
-    },
+    checkpoint: (o) => doCheckpoint(o?.keepLast),
   };
 }
 
@@ -131,7 +141,13 @@ export function createArbor(opts: ArborOpts = {}): Arbor {
   const tree = ArtifactTree.fromJson(opts.initial ?? {}, deps);
   const log = new EventLog();
   const vectors = opts.vectors ?? new MemoryVectorIndex();
-  return assemble(opts, tree, log, vectors, deps.clock);
+  const arbor = assemble(opts, tree, log, vectors, deps.clock, false);
+  // Index the initial content: fromJson fires no hooks, so without this the
+  // initial JSON would be unsearchable until first mutated.
+  if (arbor.index) {
+    for (const node of tree.allNodes()) arbor.index.onChange(node);
+  }
+  return arbor;
 }
 
 /**
@@ -148,7 +164,7 @@ export async function restoreArbor(opts: ArborOpts): Promise<Arbor | null> {
   const vectors = opts.vectors ?? new MemoryVectorIndex();
   if (opts.delta) {
     const restored = await restoreFromDelta(opts.delta, deps, vectors); // guards its idGen internally
-    if (restored) return assemble(opts, restored.tree, restored.log, vectors, deps.clock);
+    if (restored) return assemble(opts, restored.tree, restored.log, vectors, deps.clock, true);
   }
   if (opts.storage) {
     const stored = await opts.storage.load();
@@ -158,7 +174,7 @@ export async function restoreArbor(opts: ArborOpts): Promise<Arbor | null> {
         idGen: guardIdGen(deps.idGen, new Set(stored.nodes.map((n) => n.id))),
       };
       const { tree, log } = await restoreArtifact(stored, guarded, vectors);
-      return assemble(opts, tree, log, vectors, deps.clock);
+      return assemble(opts, tree, log, vectors, deps.clock, false);
     }
   }
   return null;

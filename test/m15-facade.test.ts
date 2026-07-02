@@ -87,4 +87,22 @@ describe("M15 createArbor facade", () => {
     const arbor = createArbor(opts());
     await expect(arbor.save()).rejects.toThrow();
   });
+
+  it("initial content is indexed: searchable after the first reindex, no mutation needed", async () => {
+    const arbor = createArbor(opts({ initial: { docs: { a: "initial searchable text" } }, embedding: new MockEmbeddingPort() }));
+    expect(arbor.index!.staleCount()).toBeGreaterThan(0); // initial nodes queued
+    await arbor.index!.reindex();
+    const hits = await arbor.index!.search("initial searchable text");
+    expect(hits.results[0]!.path).toBe("/docs/a"); // pre-fix: no results ever
+  });
+
+  it("saveDelta before any checkpoint auto-checkpoints (journal alone is unrestorable)", async () => {
+    const delta = new MemoryDeltaStorage();
+    const a1 = createArbor(opts({ initial: { page: "" }, delta }));
+    a1.mutator.set({ path: "/page" }, "v1");
+    await a1.saveDelta(); // no checkpoint yet — must snapshot instead of appending into the void
+    const a2 = await restoreArbor(opts({ delta }));
+    expect(a2).not.toBeNull(); // pre-fix: null (journal without checkpoint)
+    expect(a2!.tree.toJson()).toEqual({ page: "v1" });
+  });
 });
