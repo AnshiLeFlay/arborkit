@@ -78,7 +78,9 @@ export class FileDeltaStorage implements DeltaStoragePort {
 
   async appendEvents(events: readonly MutationEvent[]): Promise<void> {
     if (events.length === 0) return;
-    const lines = events.map((e) => JSON.stringify(e)).join("\n") + "\n";
+    // The leading "\n" isolates any torn tail left by a crash mid-append: new events
+    // always start on a fresh line, and blank lines are skipped on load.
+    const lines = "\n" + events.map((e) => JSON.stringify(e)).join("\n") + "\n";
     await appendFile(this.journalPath, lines, "utf8");
   }
 
@@ -97,7 +99,7 @@ export class FileDeltaStorage implements DeltaStoragePort {
       try {
         journal.push(JSON.parse(line) as MutationEvent);
       } catch {
-        break; // torn tail from a crash mid-append — stop here
+        continue; // torn/garbage line from a crash mid-append — skip it; restore validates contiguity
       }
     }
     return { checkpoint, journal: journal.filter((e) => e.seq >= v) };

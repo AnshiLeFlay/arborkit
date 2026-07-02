@@ -6,6 +6,7 @@ import { Mutator } from "./mutator";
 import type { VectorIndexPort } from "./vector-index-port";
 import { serializeArtifact, restoreArtifact } from "./storage";
 import type { DeltaStoragePort } from "./delta-storage";
+import { InvalidOpError } from "./errors";
 
 /** The JSON-Pointer of the parent container of `pointer` ("" = root). Pointer
  *  separators are literal "/"; an in-key "/" is escaped "~1", so lastIndexOf is safe. */
@@ -19,8 +20,9 @@ function parentPointer(pointer: string): string {
  * the event's stable path(s). The inverse of replay's `reverseApplyValue`: set→`after`,
  * insert→insert `after`, remove→remove, move→to. Goes through the Mutator so
  * decomposition, typing (via `e.nodeType`), and the index hooks run exactly as in normal
- * operation. Node ids for touched subtrees are regenerated; the log/replay are
- * path-addressed, so that is invisible to consumers. Malformed/pre-M7 events (missing
+ * operation. Node ids for touched subtrees are regenerated; replay/revert are path-addressed and
+ * unaffected, but id-addressed views (e.g. toolset `history`, which filters by targetId)
+ * may not see a regenerated node's pre-restore history. Malformed/pre-M7 events (missing
  * paths) are skipped.
  */
 export function applyEventForward(mutator: Mutator, e: MutationEvent): void {
@@ -57,8 +59,15 @@ export function replayForward(mutator: Mutator, events: readonly MutationEvent[]
 /**
  * Append every event newer than `sinceSeq` to the journal (the cheap, common save).
  * Returns the new high-water seq to pass next time. No-op if nothing is new.
+ * Throws if events in `[sinceSeq, baseSeq)` were compacted away before being journaled
+ * (that history is unrecoverable) — compact only right before `persistCheckpoint`.
  */
 export async function persistDelta(store: DeltaStoragePort, log: EventLog, sinceSeq: number): Promise<number> {
+  if (sinceSeq < log.baseSeqValue()) {
+    throw new InvalidOpError(
+      `persistDelta: events [${sinceSeq}, ${log.baseSeqValue()}) were compacted before being journaled`,
+    );
+  }
   const fresh = log.since(sinceSeq);
   if (fresh.length > 0) await store.appendEvents(fresh);
   return log.length();
@@ -96,6 +105,17 @@ export async function restoreFromDelta(
 ): Promise<{ tree: ArtifactTree; log: EventLog } | null> {
   const { checkpoint, journal } = await store.loadDelta();
   if (!checkpoint) return null;
+  // The journal must continue exactly where the checkpoint ends — a gap means events
+  // were lost (torn journal line, or compaction before journaling); replaying past a
+  // gap would silently produce a wrong tree, so fail loudly instead.
+  const checkpointVersion = (checkpoint.baseSeq ?? 0) + checkpoint.events.length;
+  for (let i = 0; i < journal.length; i++) {
+    if (journal[i].seq !== checkpointVersion + i) {
+      throw new InvalidOpError(
+        `restoreFromDelta: journal not contiguous with checkpoint (expected seq ${checkpointVersion + i}, got ${journal[i].seq})`,
+      );
+    }
+  }
   // Guard the id generator: `fromStored` preserves the checkpoint's node ids, but
   // `deps.idGen` starts fresh, so ids minted while replaying the journal could collide
   // with restored ids (a collision silently overwrites a live node in the node map and
