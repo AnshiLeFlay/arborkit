@@ -1,4 +1,4 @@
-import type { Json } from "./types";
+import type { Json, NodeId } from "./types";
 import { ArtifactTree, type TreeDeps } from "./artifact-tree";
 import { Addressing } from "./addressing";
 import { EventLog, type MutationEvent } from "./event-log";
@@ -139,16 +139,21 @@ export async function restoreFromDelta(
   const { tree } = await restoreArtifact(checkpoint, guardedDeps, vectors);
   const addressing = new Addressing(tree);
   const replayLog = new EventLog(); // throwaway — the faithful log is rebuilt below
+  // Mutator hooks are synchronous but the vector port is async — queue removals
+  // during replay and flush them (awaited) afterwards, so a DB-backed index never
+  // gets a fire-and-forget delete.
+  const removedIds: NodeId[] = [];
   const mutator = new Mutator(tree, addressing, replayLog, {
     clock: deps.clock,
     onChange: (node) => {
       node.meta.embedding = { state: "stale" };
     },
     onRemove: (id) => {
-      vectors.remove(id);
+      removedIds.push(id);
     },
   });
   replayForward(mutator, journal);
+  for (const id of removedIds) await vectors.remove(id);
   const log = EventLog.fromStored([...checkpoint.events, ...journal], checkpoint.baseSeq ?? 0);
   return { tree, log };
 }
