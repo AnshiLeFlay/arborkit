@@ -32,7 +32,15 @@ per-node exact + semantic index, a reversible event log, snapshots, and time-tra
   is persisted as `baseSeq` and survives restore). Time-travel (`getAt`/`reconstructValueAt`/
   `revert`) below the floor throws — that history is gone. Nothing auto-compacts; choose a
   policy (per run, sliding window, or never). `persist` still serializes the whole **tree**
-  every save (delta persistence is future work) — so very large artifacts remain costly.
+  every save (see delta persistence below) — so very large artifacts remain costly.
+- **Saves can be incremental (opt-in delta persistence).** `DeltaStoragePort` (memory + file)
+  splits persistence into a periodic full `writeCheckpoint` and cheap `appendEvents` — a
+  routine save costs O(new events) instead of rewriting the whole artifact. `persistDelta`
+  appends; `persistCheckpoint` snapshots (pair with `compactTo` first to keep the window
+  small); `restoreFromDelta` loads the checkpoint and forward-replays the journal, preserving
+  node types and the vectors of unchanged nodes (touched nodes are re-decomposed and left
+  stale for reindex). A checkpoint still serializes the whole **tree** — delta-of-tree is
+  future work; restore must use the same decompose decision as the original run.
 - **Vector search is brute-force cosine** — comfortable to ~10⁴ vectors; plug a real
   ANN store into `VectorIndexPort` beyond that.
 - **Ops are id-anchored** (a useful property for a future CRDT backend), but there is
@@ -106,6 +114,6 @@ Design spec and milestone plans live in [`docs/superpowers/`](docs/superpowers/)
 
 ## Status
 
-**v1 core complete (M1–M9), hardened (M10), packaged (M11), log compaction (M12):** tree, mutations + reversible log, optional types, exact navigation, semantic index, storage, replay/time-travel, scoped agent toolset, end-to-end scenario, index-lifecycle hardening, and an installable ESM build.
+**v1 core complete (M1–M9), hardened (M10), packaged (M11), log compaction (M12), delta persistence (M13):** tree, mutations + reversible log, optional types, exact navigation, semantic index, storage, replay/time-travel, scoped agent toolset, end-to-end scenario, index-lifecycle hardening, and an installable ESM build.
 
 Deferred (post-v1): LangChain `tool()` / MCP-server adapters over the toolset; `getAt`/`revert` as toolset methods; DB-backed storage & vector adapters (SQLite/sqlite-vec, Postgres/pgvector); a CRDT backend.
