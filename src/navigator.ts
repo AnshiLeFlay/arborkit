@@ -3,8 +3,8 @@ import type { ArtifactTree } from "./artifact-tree";
 import type { Addressing } from "./addressing";
 import { type Ref, NodeNotFoundError } from "./errors";
 import { byteSize } from "./decompose";
-import { matchGlob } from "./path-glob";
-import { isWithin } from "./jsonpointer";
+import { compileGlob } from "./path-glob";
+import { isWithin, appendPointer } from "./jsonpointer";
 
 const DEFAULT_LIMIT = 100;
 const PREVIEW_MAX = 50;
@@ -166,12 +166,10 @@ export class Navigator {
     return result;
   }
 
-  private matches(node: ArbNode, sel: FindSelector): boolean {
+  private matches(node: ArbNode, sel: FindSelector, path: string, glob?: (path: string) => boolean): boolean {
     if (sel.type !== undefined && node.type !== sel.type) return false;
     if (sel.tag !== undefined && !(node.tags?.includes(sel.tag) ?? false)) return false;
-    if (sel.pathPattern !== undefined && !matchGlob(sel.pathPattern, this.addressing.pathOf(node.id))) {
-      return false;
-    }
+    if (glob !== undefined && !glob(path)) return false;
     return true;
   }
 
@@ -179,16 +177,18 @@ export class Navigator {
   find(selector: FindSelector, opts: FindOpts = {}): FindResult {
     const limit = opts.limit ?? DEFAULT_LIMIT;
     const within = opts.within;
+    // The pattern is parsed ONCE per find; each node's path is built incrementally
+    // down the DFS (no per-node pathOf walk to the root).
+    const glob = selector.pathPattern !== undefined ? compileGlob(selector.pathPattern) : undefined;
     const hits: FindHit[] = [];
     let truncated = false;
-    const visit = (id: NodeId): void => {
+    const visit = (id: NodeId, path: string): void => {
       if (hits.length >= limit) {
         truncated = true;
         return;
       }
       const node = this.tree.get(id)!;
-      if (this.matches(node, selector)) {
-        const path = this.addressing.pathOf(node.id);
+      if (this.matches(node, selector, path, glob)) {
         if (isWithin(path, within)) {
           hits.push({ id: node.id, path, type: node.type });
         }
@@ -198,10 +198,11 @@ export class Navigator {
           truncated = true;
           break;
         }
-        visit(cid);
+        const child = this.tree.get(cid)!;
+        visit(cid, appendPointer(path, child.key as string | number));
       }
     };
-    visit(this.tree.rootIdValue());
+    visit(this.tree.rootIdValue(), "");
     return { hits, truncated };
   }
 }

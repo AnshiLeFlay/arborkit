@@ -18,9 +18,19 @@ function matchSegments(pattern: string[], path: string[]): boolean {
 }
 
 /**
- * Glob-match a JSON Pointer `path` against a `pattern`.
+ * Parse a glob `pattern` ONCE and return a reusable matcher over JSON Pointer paths.
  * `*` matches exactly one path segment; `**` matches zero or more segments.
  */
+export function compileGlob(pattern: string): (path: string) => boolean {
+  const patternSegs = parsePointer(pattern);
+  return (path: string) => matchSegments(patternSegs, parsePointer(path));
+}
+
+/**
+ * Glob-match a JSON Pointer `path` against a `pattern`.
+ * `*` matches exactly one path segment; `**` matches zero or more segments.
+ * One-shot convenience over `compileGlob` — prefer compiling when matching many paths.
+ */
 export function matchGlob(pattern: string, path: string): boolean {
-  return matchSegments(parsePointer(pattern), parsePointer(path));
+  return compileGlob(pattern)(path);
 }

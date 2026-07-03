@@ -14,6 +14,11 @@ export function buildPointer(segments: ReadonlyArray<string | number>): string {
   return "/" + segments.map((s) => encodeSegment(String(s))).join("/");
 }
 
+/** Append one child key to a parent pointer, escaping the key exactly as `buildPointer` does. */
+export function appendPointer(parent: string, key: string | number): string {
+  return parent + "/" + encodeSegment(String(key));
+}
+
 /** True when `path` is at or under `scope` (JSON Pointer prefix). Undefined scope = everywhere. */
 export function isWithin(path: string, scope: string | undefined): boolean {
   return scope === undefined || path === scope || path.startsWith(scope + "/");

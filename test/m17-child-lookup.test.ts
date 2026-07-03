@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { ArtifactTree, type TreeDeps } from "../src/artifact-tree";
+import { Addressing } from "../src/addressing";
+import { Navigator } from "../src/navigator";
 import { SeqIdGen } from "../src/ids";
 import { FixedClock } from "../src/clock";
 import { sizeBasedDecision } from "../src/decompose";
@@ -89,5 +91,16 @@ describe("ArtifactTree.childByKey", () => {
     const hit = tree.childByKey(tree.rootIdValue(), "a/b");
     expect(hit).toBeDefined();
     expect(hit!.content).toBe("slashed");
+  });
+});
+
+describe("Navigator.find pointer escaping", () => {
+  it('finds a child keyed "a/b" under /x via the escaped pattern /x/a~1b', () => {
+    const tree = makeTree({ x: { "a/b": "slashed-value", plain: "other" } });
+    const navigator = new Navigator(tree, new Addressing(tree));
+    const result = navigator.find({ pathPattern: "/x/a~1b" });
+    expect(result.hits).toHaveLength(1);
+    expect(result.hits[0].path).toBe("/x/a~1b");
+    expect(result.hits[0].id).toBe(tree.childByKey(tree.childByKey(tree.rootIdValue(), "x")!.id, "a/b")!.id);
   });
 });
