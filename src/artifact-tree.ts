@@ -18,6 +18,11 @@ export interface TreeSnapshot {
 export class ArtifactTree {
   private readonly nodes = new Map<NodeId, ArbNode>();
   private rootId!: NodeId;
+  /** Lazily built per-parent key→childId maps for O(1) object-child lookup.
+   *  A cache OUTSIDE the nodes (ArbNode/StoredArtifact stay byte-identical);
+   *  invalidated on every child-set change, rebuilt on read. Arrays never
+   *  populate it (index lookup is already O(1)). */
+  private readonly keyMaps = new Map<NodeId, Map<string, NodeId>>();
 
   private constructor(private readonly deps: TreeDeps) {}
 
@@ -67,6 +72,25 @@ export class ArtifactTree {
     return this.rootId;
   }
 
+  /** O(1) child lookup: arrays by index, objects via a lazily built key map. */
+  childByKey(parentId: NodeId, key: string): ArbNode | undefined {
+    const parent = this.nodes.get(parentId);
+    if (!parent) return undefined;
+    if (parent.kind === "array") {
+      const i = Number(key);
+      if (!Number.isInteger(i) || i < 0 || i >= parent.childIds.length) return undefined;
+      return this.nodes.get(parent.childIds[i]);
+    }
+    let map = this.keyMaps.get(parentId);
+    if (!map) {
+      map = new Map();
+      for (const cid of parent.childIds) map.set(String(this.nodes.get(cid)!.key), cid);
+      this.keyMaps.set(parentId, map);
+    }
+    const cid = map.get(key);
+    return cid === undefined ? undefined : this.nodes.get(cid);
+  }
+
   children(id: NodeId): ArbNode[] {
     const n = this.nodes.get(id);
     if (!n) return [];
@@ -101,6 +125,7 @@ export class ArtifactTree {
     const node = this.nodes.get(id);
     if (!node) throw new InvalidOpError(`Unknown node: ${id}`);
     this.deleteDescendants(id);
+    this.keyMaps.delete(id);
     const opaque = this.deps.decision.isOpaque(value, type);
     const kind = kindOf(value, opaque);
     node.kind = kind;
@@ -126,11 +151,13 @@ export class ArtifactTree {
     for (const cid of node.childIds) {
       this.deleteDescendants(cid);
       this.nodes.delete(cid);
+      this.keyMaps.delete(cid);
     }
     node.childIds = [];
   }
 
-  /** Deep, independent copy of the tree state for transaction rollback. */
+  /** Deep, independent copy of the tree state for transaction rollback.
+   *  `restore` consumes the snapshot; do not reuse it afterwards. */
   snapshot(): TreeSnapshot {
     const nodes = new Map<NodeId, ArbNode>();
     for (const [id, node] of this.nodes) {
@@ -139,11 +166,14 @@ export class ArtifactTree {
     return { nodes, rootId: this.rootId };
   }
 
-  /** Replace the tree state with a previously taken snapshot. */
+  /** Replace the tree state with a previously taken snapshot. The snapshot's
+   *  nodes are adopted BY REFERENCE — restore consumes the snapshot; do not
+   *  reuse it afterwards. */
   restore(snap: TreeSnapshot): void {
     this.nodes.clear();
+    this.keyMaps.clear();
     for (const [id, node] of snap.nodes) {
-      this.nodes.set(id, structuredClone(node));
+      this.nodes.set(id, node);
     }
     this.rootId = snap.rootId;
   }
@@ -161,6 +191,7 @@ export class ArtifactTree {
       }
       const cid = this.build(value, parentId, keyOrIndex, type);
       parent.childIds.push(cid);
+      this.keyMaps.delete(parentId);
       return cid;
     }
     if (parent.kind === "array") {
@@ -184,7 +215,9 @@ export class ArtifactTree {
     if (idx < 0) throw new InvalidOpError(`${childId} is not a child of ${parentId}`);
     this.deleteDescendants(childId);
     this.nodes.delete(childId);
+    this.keyMaps.delete(childId);
     parent.childIds.splice(idx, 1);
+    this.keyMaps.delete(parentId);
     if (parent.kind === "array") this.renumberArray(parentId);
   }
 
@@ -215,6 +248,8 @@ export class ArtifactTree {
     const oldParent = this.nodes.get(node.parentId)!;
     const oldIdx = oldParent.childIds.indexOf(id);
     oldParent.childIds.splice(oldIdx, 1);
+    this.keyMaps.delete(oldParent.id);
+    this.keyMaps.delete(newParentId);
     if (oldParent.kind === "array") this.renumberArray(oldParent.id);
 
     if (newParent.kind === "object") {

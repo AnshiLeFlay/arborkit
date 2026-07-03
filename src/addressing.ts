@@ -33,9 +33,10 @@ export class Addressing {
     let cur: ArbNode | undefined = this.tree.root();
     for (const seg of segments) {
       if (!cur) return undefined;
-      const child: ArbNode | undefined = this.tree.children(cur.id).find((c) => String(c.key) === seg);
-      if (!child) return undefined;
-      cur = child;
+      // parsePointer yields UNescaped segments and node keys are raw strings —
+      // they match childByKey's String(key) map keys directly.
+      cur = this.tree.childByKey(cur.id, seg);
+      if (!cur) return undefined;
     }
     return cur;
   }
