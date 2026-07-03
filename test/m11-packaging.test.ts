@@ -26,6 +26,21 @@ const got = await tools.get({ path: "/pages/home" });
 if (!got.ok || got.value.content.title !== "Home") throw new Error("get failed");
 const refused = await tools.patch({ path: "/secret" }, { op: "set", value: 1 });
 if (refused.ok) throw new Error("scope violation not refused");
+// Cross-entry class identity: with code splitting OFF, subpath entries bundle their
+// OWN copies of shared classes and instanceof breaks across entries — e.g. the
+// toolset's internal \`e instanceof ArborError\` degrades SCOPE_VIOLATION to ERROR.
+// (/secret above is NODE_NOT_FOUND — resolve precedes checkScope; use an EXISTING
+// out-of-scope path for the scope case.)
+const scopeRefused = await tools.patch({ path: "" }, { op: "set", value: {} });
+if (scopeRefused.ok || scopeRefused.error.code !== "SCOPE_VIOLATION")
+  throw new Error("scope code wrong: " + (scopeRefused.ok ? "ok" : scopeRefused.error.code));
+const { ScopeViolationError } = await import("arborkit/errors");
+try {
+  mutator.set({ path: "/pages/home" }, 1, { writeScope: "/elsewhere" });
+  throw new Error("expected scope violation");
+} catch (e) {
+  if (!(e instanceof ScopeViolationError)) throw new Error("cross-entry instanceof broken: subpath-imported class !== root-thrown instance");
+}
 
 const store = new MemoryStorage();
 await store.save(await serializeArtifact(tree, log, new MemoryVectorIndex()));

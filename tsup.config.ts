@@ -8,9 +8,12 @@ export default defineConfig({
   platform: "node",
   target: "node20",
   dts: true,
-  // No code splitting: hash-named chunk-*.js files would be importable through
-  // the "./*" exports map, becoming accidental public API. Duplication is fine.
-  splitting: false,
+  // Code splitting ON: without it every subpath entry bundles its OWN copies of
+  // shared classes, so `instanceof` breaks across mixed root/subpath imports
+  // (e.g. toolset's `e instanceof ArborError` failing against a Mutator error).
+  // Chunk files stay private: package.json enumerates exports explicitly, so
+  // hash-named chunks are not importable.
+  splitting: true,
   sourcemap: true,
   clean: true,
 });

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.1 — 2026-07-03
+
+- **Fix: cross-entry `instanceof` breakage.** 1.0.0 was built without code splitting, so every
+  subpath entry (`arborkit/errors`, `arborkit/toolset`, …) bundled its own copies of shared
+  classes — mixing root and subpath imports broke `instanceof` (e.g. the toolset degraded
+  `SCOPE_VIOLATION` results to generic `ERROR` against a `Mutator` imported from another entry).
+  Splitting is now enabled; shared chunks give one class identity across all entries.
+- Chunk files stay private: the `"./*"` wildcard export is replaced by an explicit per-module
+  exports map, so hash-named chunks are not importable. All documented entry points are unchanged.
+
 ## 1.0.0 — 2026-07-03
 
 First public release of Arbor as `arborkit`. The milestone arc:

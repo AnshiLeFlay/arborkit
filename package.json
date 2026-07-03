@@ -1,6 +1,6 @@
 {
   "name": "arborkit",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Arbor — a shared, typed, versioned JSON artifact tree for multi-agent systems: lazy navigation, scoped agent tools, exact + semantic indexing, reversible event log with time-travel, snapshot + delta persistence.",
   "keywords": [
     "agents",
@@ -17,16 +17,139 @@
   "author": "D. A. Pominov <d.a.pominov@gmail.com>",
   "license": "MIT",
   "type": "module",
-  "engines": { "node": ">=20.6" },
+  "engines": {
+    "node": ">=20.6"
+  },
   "sideEffects": false,
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
-    "./*": { "types": "./dist/*.d.ts", "import": "./dist/*.js" }
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./addressing": {
+      "types": "./dist/addressing.d.ts",
+      "import": "./dist/addressing.js"
+    },
+    "./ag-ui": {
+      "types": "./dist/ag-ui.d.ts",
+      "import": "./dist/ag-ui.js"
+    },
+    "./arbor": {
+      "types": "./dist/arbor.d.ts",
+      "import": "./dist/arbor.js"
+    },
+    "./artifact-tree": {
+      "types": "./dist/artifact-tree.d.ts",
+      "import": "./dist/artifact-tree.js"
+    },
+    "./clock": {
+      "types": "./dist/clock.d.ts",
+      "import": "./dist/clock.js"
+    },
+    "./decompose": {
+      "types": "./dist/decompose.d.ts",
+      "import": "./dist/decompose.js"
+    },
+    "./delta-storage": {
+      "types": "./dist/delta-storage.d.ts",
+      "import": "./dist/delta-storage.js"
+    },
+    "./delta": {
+      "types": "./dist/delta.d.ts",
+      "import": "./dist/delta.js"
+    },
+    "./embedding-port": {
+      "types": "./dist/embedding-port.d.ts",
+      "import": "./dist/embedding-port.js"
+    },
+    "./embedding-text": {
+      "types": "./dist/embedding-text.d.ts",
+      "import": "./dist/embedding-text.js"
+    },
+    "./errors": {
+      "types": "./dist/errors.d.ts",
+      "import": "./dist/errors.js"
+    },
+    "./event-log": {
+      "types": "./dist/event-log.d.ts",
+      "import": "./dist/event-log.js"
+    },
+    "./file-storage": {
+      "types": "./dist/file-storage.d.ts",
+      "import": "./dist/file-storage.js"
+    },
+    "./ids": {
+      "types": "./dist/ids.d.ts",
+      "import": "./dist/ids.js"
+    },
+    "./json-edit": {
+      "types": "./dist/json-edit.d.ts",
+      "import": "./dist/json-edit.js"
+    },
+    "./jsonpointer": {
+      "types": "./dist/jsonpointer.d.ts",
+      "import": "./dist/jsonpointer.js"
+    },
+    "./mutator": {
+      "types": "./dist/mutator.d.ts",
+      "import": "./dist/mutator.js"
+    },
+    "./navigator": {
+      "types": "./dist/navigator.d.ts",
+      "import": "./dist/navigator.js"
+    },
+    "./path-glob": {
+      "types": "./dist/path-glob.d.ts",
+      "import": "./dist/path-glob.js"
+    },
+    "./registry-validator": {
+      "types": "./dist/registry-validator.d.ts",
+      "import": "./dist/registry-validator.js"
+    },
+    "./replay": {
+      "types": "./dist/replay.d.ts",
+      "import": "./dist/replay.js"
+    },
+    "./semantic-index": {
+      "types": "./dist/semantic-index.d.ts",
+      "import": "./dist/semantic-index.js"
+    },
+    "./storage": {
+      "types": "./dist/storage.d.ts",
+      "import": "./dist/storage.js"
+    },
+    "./toolset": {
+      "types": "./dist/toolset.d.ts",
+      "import": "./dist/toolset.js"
+    },
+    "./type-aware-decision": {
+      "types": "./dist/type-aware-decision.d.ts",
+      "import": "./dist/type-aware-decision.js"
+    },
+    "./type-registry": {
+      "types": "./dist/type-registry.d.ts",
+      "import": "./dist/type-registry.js"
+    },
+    "./types": {
+      "types": "./dist/types.d.ts",
+      "import": "./dist/types.js"
+    },
+    "./vector-index-port": {
+      "types": "./dist/vector-index-port.d.ts",
+      "import": "./dist/vector-index-port.js"
+    },
+    "./zod-adapter": {
+      "types": "./dist/zod-adapter.d.ts",
+      "import": "./dist/zod-adapter.js"
+    }
   },
-  "files": ["dist", "CHANGELOG.md"],
+  "files": [
+    "dist",
+    "CHANGELOG.md"
+  ],
   "scripts": {
     "build": "tsup",
     "prepack": "npm run build",
