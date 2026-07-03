@@ -77,8 +77,9 @@ export class ArtifactTree {
     const parent = this.nodes.get(parentId);
     if (!parent) return undefined;
     if (parent.kind === "array") {
+      if (!/^(0|[1-9]\d*)$/.test(key)) return undefined; // canonical RFC 6901 index: digits only, no leading zeros
       const i = Number(key);
-      if (!Number.isInteger(i) || i < 0 || i >= parent.childIds.length) return undefined;
+      if (i >= parent.childIds.length) return undefined;
       return this.nodes.get(parent.childIds[i]);
     }
     let map = this.keyMaps.get(parentId);

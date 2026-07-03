@@ -34,6 +34,16 @@ describe("ArtifactTree.childByKey", () => {
     expect(tree.childByKey(itemsId, "x")).toBeUndefined();
   });
 
+  it("rejects non-canonical array index strings (RFC 6901)", () => {
+    const tree = makeTree({ items: ["aaa", "bbb", "ccc"] });
+    const arrId = tree.childByKey(tree.rootIdValue(), "items")!.id;
+    for (const bad of ["01", "", " 1", "1e0", "0x1", "-0", "1.0"]) {
+      expect(tree.childByKey(arrId, bad)).toBeUndefined();
+    }
+    expect(tree.childByKey(arrId, "1")).toBeDefined();
+    expect(tree.childByKey(arrId, "0")).toBeDefined();
+  });
+
   it("returns undefined for an unknown parent id", () => {
     const tree = makeTree({ a: 1 });
     expect(tree.childByKey("nope", "a")).toBeUndefined();

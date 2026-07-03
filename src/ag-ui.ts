@@ -4,6 +4,7 @@
 import type { Json } from "./types";
 import type { ArtifactTree } from "./artifact-tree";
 import type { EventLog, MutationEvent } from "./event-log";
+import { InvalidOpError } from "./errors";
 
 /** RFC 6902 operation (the subset Arbor emits). */
 export type JsonPatchOp =
@@ -43,8 +44,18 @@ export function snapshotEvent(tree: ArtifactTree): AgUiStateSnapshot {
 }
 
 /** Retained events with seq >= sinceSeq as ONE AG-UI STATE_DELTA event (pathless
- *  pre-M7 events are skipped). Returns the delta plus the next since-cursor. */
+ *  pre-M7 events are skipped). Returns the delta plus the next since-cursor.
+ *
+ *  Throws InvalidOpError when `sinceSeq` is below the log's compaction floor:
+ *  the events in [sinceSeq, baseSeq) are gone, and applying a gapped delta would
+ *  silently diverge the client. On this error the caller must re-send a fresh
+ *  `snapshotEvent` (and resume deltas from the current version) instead. */
 export function deltaSince(log: EventLog, sinceSeq: number): { event: AgUiStateDelta; nextSeq: number } {
+  if (sinceSeq < log.baseSeqValue()) {
+    throw new InvalidOpError(
+      `deltaSince: events [${sinceSeq}, ${log.baseSeqValue()}) were compacted away — send a fresh STATE_SNAPSHOT instead`,
+    );
+  }
   const delta: JsonPatchOp[] = [];
   for (const e of log.since(sinceSeq)) {
     const op = toJsonPatch(e);

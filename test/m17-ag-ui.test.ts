@@ -9,6 +9,7 @@ import { FixedClock } from "../src/clock";
 import type { Json } from "../src/types";
 import { getAtPath, setAtPathMut, insertAtPathMut, removeAtPathMut } from "../src/json-edit";
 import { toJsonPatch, snapshotEvent, deltaSince, type JsonPatchOp } from "../src/ag-ui";
+import { InvalidOpError } from "../src/errors";
 
 function setup(json: unknown) {
   const clock = new FixedClock(0);
@@ -81,5 +82,15 @@ describe("AG-UI adapter", () => {
     expect(toJsonPatch(log.at(0)!)).toBeNull();
     const { event } = deltaSince(log, 0);
     expect(event.delta).toEqual([]);
+  });
+
+  it("deltaSince throws below the compaction floor instead of silently dropping ops", () => {
+    const { mutator, log } = setup({ a: "x", b: "y", c: "z" });
+    mutator.set({ path: "/a" }, "1");
+    mutator.set({ path: "/b" }, "2");
+    mutator.set({ path: "/c" }, "3");
+    log.compactTo(2);
+    expect(() => deltaSince(log, 0)).toThrow(InvalidOpError); // pre-fix: returns a gapped delta
+    expect(deltaSince(log, 2).event.delta.length).toBeGreaterThanOrEqual(0); // at the floor is fine
   });
 });
