@@ -4,22 +4,24 @@ import type { Addressing } from "./addressing";
 import type { EventLog, MutationEvent } from "./event-log";
 import type { Mutator } from "./mutator";
 import { type Ref, InvalidOpError } from "./errors";
-import { getAtPath, setAtPath, removeAtPath, insertAtPath } from "./json-edit";
+import { getAtPath, setAtPathMut, removeAtPathMut, insertAtPathMut } from "./json-edit";
 
-/** Undo a single event on a JSON value, addressed by the event's recorded path(s). */
+/** Undo a single event on a JSON value IN PLACE (the caller owns `value` — it is the
+ *  single upfront clone made by `reconstructValueAt`). The spliced-in `before` values
+ *  are still cloned (M14): they protect the LOG from mutation through the output. */
 function reverseApplyValue(value: Json, e: MutationEvent): Json {
   switch (e.kind) {
     case "set":
-      return e.path === undefined ? value : setAtPath(value, e.path, structuredClone(e.before ?? null));
+      return e.path === undefined ? value : setAtPathMut(value, e.path, structuredClone(e.before ?? null));
     case "insert":
-      return e.path === undefined ? value : removeAtPath(value, e.path);
+      return e.path === undefined ? value : removeAtPathMut(value, e.path);
     case "remove":
-      return e.path === undefined ? value : insertAtPath(value, e.path, structuredClone(e.before ?? null));
+      return e.path === undefined ? value : insertAtPathMut(value, e.path, structuredClone(e.before ?? null));
     case "move": {
       if (e.toPath === undefined || e.fromPath === undefined) return value;
       const moved = getAtPath(value, e.toPath) ?? null;
-      const withoutMoved = removeAtPath(value, e.toPath);
-      return insertAtPath(withoutMoved, e.fromPath, moved);
+      const withoutMoved = removeAtPathMut(value, e.toPath);
+      return insertAtPathMut(withoutMoved, e.fromPath, moved);
     }
   }
 }

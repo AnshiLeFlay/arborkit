@@ -34,35 +34,47 @@ function navParent(root: Json, pointer: string): { parent: Json; key: string } |
   return { parent: cur, key: segs[segs.length - 1] };
 }
 
-/** Return a copy of `value` with the value at `pointer` replaced (root → returns `newVal`). */
-export function setAtPath(value: Json, pointer: string, newVal: Json): Json {
+/** In-place variant of setAtPath: mutates `value` (root pointer returns `newVal`). */
+export function setAtPathMut(value: Json, pointer: string, newVal: Json): Json {
   if (pointer === "") return newVal;
-  const clone = structuredClone(value);
-  const pk = navParent(clone, pointer);
-  if (!pk || pk.parent === null || typeof pk.parent !== "object") return clone;
+  const pk = navParent(value, pointer);
+  if (!pk || pk.parent === null || typeof pk.parent !== "object") return value;
   if (Array.isArray(pk.parent)) pk.parent[Number(pk.key)] = newVal;
   else (pk.parent as Record<string, Json>)[pk.key] = newVal;
-  return clone;
+  return value;
+}
+
+/** In-place variant of removeAtPath: mutates `value` (root pointer returns null). */
+export function removeAtPathMut(value: Json, pointer: string): Json {
+  if (pointer === "") return null;
+  const pk = navParent(value, pointer);
+  if (!pk || pk.parent === null || typeof pk.parent !== "object") return value;
+  if (Array.isArray(pk.parent)) pk.parent.splice(Number(pk.key), 1);
+  else delete (pk.parent as Record<string, Json>)[pk.key];
+  return value;
+}
+
+/** In-place variant of insertAtPath: mutates `value` (root pointer returns `val`). */
+export function insertAtPathMut(value: Json, pointer: string, val: Json): Json {
+  if (pointer === "") return val;
+  const pk = navParent(value, pointer);
+  if (!pk || pk.parent === null || typeof pk.parent !== "object") return value;
+  if (Array.isArray(pk.parent)) pk.parent.splice(Number(pk.key), 0, val);
+  else (pk.parent as Record<string, Json>)[pk.key] = val;
+  return value;
+}
+
+/** Return a copy of `value` with the value at `pointer` replaced (root → returns `newVal`). */
+export function setAtPath(value: Json, pointer: string, newVal: Json): Json {
+  return setAtPathMut(structuredClone(value), pointer, newVal);
 }
 
 /** Return a copy of `value` with the element at `pointer` removed (object delete / array splice). */
 export function removeAtPath(value: Json, pointer: string): Json {
-  if (pointer === "") return null;
-  const clone = structuredClone(value);
-  const pk = navParent(clone, pointer);
-  if (!pk || pk.parent === null || typeof pk.parent !== "object") return clone;
-  if (Array.isArray(pk.parent)) pk.parent.splice(Number(pk.key), 1);
-  else delete (pk.parent as Record<string, Json>)[pk.key];
-  return clone;
+  return removeAtPathMut(structuredClone(value), pointer);
 }
 
 /** Return a copy of `value` with `val` inserted at `pointer` (object set / array splice-in). */
 export function insertAtPath(value: Json, pointer: string, val: Json): Json {
-  if (pointer === "") return val;
-  const clone = structuredClone(value);
-  const pk = navParent(clone, pointer);
-  if (!pk || pk.parent === null || typeof pk.parent !== "object") return clone;
-  if (Array.isArray(pk.parent)) pk.parent.splice(Number(pk.key), 0, val);
-  else (pk.parent as Record<string, Json>)[pk.key] = val;
-  return clone;
+  return insertAtPathMut(structuredClone(value), pointer, val);
 }
