@@ -21,25 +21,35 @@ export interface VectorIndexPort {
   entries(): Promise<VectorIndexEntry[]>;
 }
 
-function cosine(a: number[], b: number[]): number {
-  let dot = 0;
-  let na = 0;
-  let nb = 0;
-  for (let i = 0; i < a.length; i++) {
-    dot += a[i] * b[i];
-    na += a[i] * a[i];
-    nb += b[i] * b[i];
-  }
-  if (na === 0 || nb === 0) return 0;
-  return dot / (Math.sqrt(na) * Math.sqrt(nb));
+/** Unit-normalize into a Float32Array; zero-norm vectors stay all-zeros
+ *  (their dot with anything is 0 — matches cosine's zero-magnitude behavior). */
+function normalize(v: ArrayLike<number>): Float32Array {
+  const out = new Float32Array(v.length);
+  let n = 0;
+  for (let i = 0; i < v.length; i++) n += v[i] * v[i];
+  if (n === 0) return out;
+  const inv = 1 / Math.sqrt(n);
+  for (let i = 0; i < v.length; i++) out[i] = v[i] * inv;
+  return out;
 }
 
-/** In-memory brute-force cosine index. Correct and simple at current scale. */
+function dot(a: Float32Array, b: Float32Array): number {
+  const len = Math.min(a.length, b.length);
+  let d = 0;
+  for (let i = 0; i < len; i++) d += a[i] * b[i];
+  return d;
+}
+
+/** In-memory brute-force index. Vectors are stored as Float32Arrays (raw for
+ *  `entries()`, unit-normalized for search) so `search` is a plain dot product
+ *  — the cosine of two normalized vectors. Correct and simple at current scale. */
 export class MemoryVectorIndex implements VectorIndexPort {
-  private readonly vectors = new Map<NodeId, number[]>();
+  private readonly vectors = new Map<NodeId, { raw: Float32Array; unit: Float32Array }>();
 
   async upsert(entries: VectorIndexEntry[]): Promise<void> {
-    for (const e of entries) this.vectors.set(e.nodeId, e.vector);
+    for (const e of entries) {
+      this.vectors.set(e.nodeId, { raw: Float32Array.from(e.vector), unit: normalize(e.vector) });
+    }
   }
 
   async remove(nodeId: NodeId): Promise<void> {
@@ -55,15 +65,16 @@ export class MemoryVectorIndex implements VectorIndexPort {
   }
 
   async search(query: number[], k: number): Promise<VectorHit[]> {
+    const q = normalize(query);
     const hits: VectorHit[] = [];
-    for (const [nodeId, vector] of this.vectors) {
-      hits.push({ nodeId, score: cosine(query, vector) });
+    for (const [nodeId, { unit }] of this.vectors) {
+      hits.push({ nodeId, score: dot(q, unit) });
     }
     hits.sort((a, b) => b.score - a.score);
     return hits.slice(0, k);
   }
 
   async entries(): Promise<VectorIndexEntry[]> {
-    return [...this.vectors].map(([nodeId, vector]) => ({ nodeId, vector }));
+    return [...this.vectors].map(([nodeId, { raw }]) => ({ nodeId, vector: Array.from(raw) }));
   }
 }
