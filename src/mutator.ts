@@ -163,6 +163,8 @@ export class Mutator {
     if (this.deps.onRemove) {
       for (const id of removedIds) this.deps.onRemove(id);
     }
+    // The parent's semantic unit (if any) lost content — re-hash it.
+    this.deps.onChange?.(parent);
     this.log.append({
       kind: "remove",
       targetId: node.id,
@@ -197,6 +199,19 @@ export class Mutator {
         if (n) this.bump(n, opts.owner);
         bumped.add(id);
       }
+    }
+    if (this.deps.onChange) {
+      // The moved subtree's ancestry changed (suppression status may flip), and
+      // both old and new locations' semantic units changed content.
+      this.deps.onChange(node);
+      for (const id of this.tree.descendantIds(node.id)) {
+        const d = this.tree.get(id);
+        if (d) this.deps.onChange(d);
+      }
+      const oldP = oldParentId !== null ? this.tree.get(oldParentId) : undefined;
+      if (oldP) this.deps.onChange(oldP);
+      const newP = this.tree.get(toParent.id);
+      if (newP) this.deps.onChange(newP);
     }
     this.log.append({
       kind: "move",

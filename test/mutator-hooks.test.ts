@@ -45,13 +45,17 @@ describe("Mutator semantic hooks", () => {
     expect(removed).toEqual([id]);
   });
 
-  it("move fires NEITHER onChange nor onRemove (content unchanged)", () => {
+  it("move fires onChange for the moved node and BOTH parents (ancestry + unit content changed), no onRemove", () => {
     const { addressing, mutator, changed, removed } = setup({ from: { x: "v" }, to: {} });
     changed.length = 0;
     removed.length = 0;
     const id = addressing.byPath("/from/x")!.id;
+    const fromId = addressing.byPath("/from")!.id;
+    const toId = addressing.byPath("/to")!.id;
     mutator.move({ id }, { path: "/to" }, "x");
-    expect(changed).toEqual([]);
+    // Moved node first (suppression status may flip), then old parent, then new
+    // parent — a typed-embedText unit on either side must be re-hashed (M17 T1).
+    expect(changed).toEqual([id, fromId, toId]);
     expect(removed).toEqual([]);
   });
 });

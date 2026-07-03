@@ -52,22 +52,27 @@ export class SemanticIndex {
     }
   }
 
-  /**
-   * A node is a suppressed decomposition shard iff some ANCESTOR has a typed
-   * embedText AND the node does not itself declare a typed embedText.
-   * (O(depth) walk per call — fine at v1 artifact sizes.)
-   */
-  private isSuppressedShard(node: ArbNode): boolean {
-    const ownTypeDef = node.type ? this.registry?.get(node.type) : undefined;
-    if (ownTypeDef?.embedText) return false; // node is its own semantic unit
+  /** The nearest ancestor whose type declares embedText — the semantic unit that
+   *  owns this shard — or undefined. (O(depth) walk per call — fine at v1 sizes.) */
+  private embedTextAncestor(node: ArbNode): ArbNode | undefined {
     let pid = node.parentId;
     while (pid !== null) {
       const anc = this.tree.get(pid);
       const ancDef = anc?.type ? this.registry?.get(anc.type) : undefined;
-      if (ancDef?.embedText) return true;
+      if (ancDef?.embedText) return anc;
       pid = anc?.parentId ?? null;
     }
-    return false;
+    return undefined;
+  }
+
+  /**
+   * A node is a suppressed decomposition shard iff some ANCESTOR has a typed
+   * embedText AND the node does not itself declare a typed embedText.
+   */
+  private isSuppressedShard(node: ArbNode): boolean {
+    const ownTypeDef = node.type ? this.registry?.get(node.type) : undefined;
+    if (ownTypeDef?.embedText) return false; // node is its own semantic unit
+    return this.embedTextAncestor(node) !== undefined;
   }
 
   /** Mutation hook: a node's content changed (set/insert). Marks it stale if its embedding-text changed. */
@@ -76,6 +81,11 @@ export class SemanticIndex {
       node.meta.embedding = { state: "none" };
       this.pendingRemoval.add(node.id);
       this.stale.delete(node.id);
+      // The owning typed unit's embed text covers this shard — re-hash IT.
+      // (Terminates: the ancestor has its own embedText, so it takes the
+      // normal branch below.)
+      const anc = this.embedTextAncestor(node);
+      if (anc) this.onChange(anc);
       return;
     }
     const value = this.tree.toJson(node.id);
