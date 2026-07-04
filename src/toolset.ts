@@ -21,11 +21,16 @@ import type { Json, NodeId } from "./types";
 /** Every toolset call returns this — errors are structured, never thrown across the agent boundary. */
 export type ToolResult<T> = { ok: true; value: T } | { ok: false; error: { code: string; message: string } };
 
+/** `edit` is exact-substring surgery on a string leaf — pure sugar over `set`: the event
+ *  log records a plain `set` with the full before/after value, so history/revert/replay/
+ *  AG-UI need nothing new. `old` must match the live value exactly (and uniquely, unless
+ *  `replaceAll`) — `get` the node first and quote `old` from what it returns. */
 export type PatchOp =
   | { op: "set"; value: Json; ifVersion?: number }
   | { op: "insert"; key: string | number; value: Json; ifVersion?: number }
   | { op: "remove"; ifVersion?: number }
-  | { op: "move"; to: Ref; key: string | number; ifVersion?: number };
+  | { op: "move"; to: Ref; key: string | number; ifVersion?: number }
+  | { op: "edit"; old: string; new: string; replaceAll?: boolean; ifVersion?: number };
 
 export interface ToolsetDeps {
   tree: ArtifactTree;
@@ -155,6 +160,33 @@ export function makeToolset(deps: ToolsetDeps, binding: ToolsetBinding = {}): To
             const node = resolve(ref);
             deps.mutator.move(ref, op.to, op.key, common);
             return { id: node.id, path: addressing.pathOf(node.id), version: node.meta.version };
+          }
+          case "edit": {
+            const node = resolve(ref);
+            const path = addressing.pathOf(node.id);
+            const value = tree.toJson(node.id);
+            if (typeof value !== "string") {
+              const kind = Array.isArray(value) ? "an array" : typeof value;
+              throw new InvalidOpError(
+                `edit targets string values; ${path} is ${kind} — target a string field inside it`,
+              );
+            }
+            if (op.old === "") throw new InvalidOpError("edit: old must be non-empty");
+            if (op.old === op.new) throw new InvalidOpError("edit: old and new are identical");
+            const count = value.split(op.old).length - 1;
+            if (count === 0) throw new InvalidOpError(`edit: old string not found in ${path}`);
+            if (count > 1 && !op.replaceAll) {
+              throw new InvalidOpError(
+                `edit: old string occurs ${count} times in ${path} — quote a larger unique fragment or set replaceAll`,
+              );
+            }
+            // split/join instead of String.replace: replace() interprets `$&` etc. in the
+            // replacement string, which would corrupt an exact-substring edit. When count
+            // is 1 the two are equivalent anyway.
+            const next = value.split(op.old).join(op.new);
+            deps.mutator.set(ref, next, common);
+            const after = resolve(ref);
+            return { id: after.id, path: addressing.pathOf(after.id), version: after.meta.version };
           }
         }
       }),
