@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.1.1 — 2026-07-06
+
+- **Fix: `restoreArtifact` now guards against id collisions.** A deterministic
+  `idGen` (e.g. a sequence generator) restarted in a new process could re-mint
+  ids already used by restored nodes; the next mutation then silently
+  overwrote a live node (up to corrupting the parent chain into a cycle). The
+  restore now seeds an id guard from the stored node ids — the same protection
+  the delta path always had, now shared as the exported `guardIdGen(idGen, used)`
+  (also consolidates two previous inline copies).
+- **Fix: nested `embedText` staleness propagates outward.** A write inside a
+  nested embedText unit re-marked only the nearest unit; every embedText-typed
+  ancestor is now re-hashed, so outer units no longer go silently stale.
+  (Pre-fix, even *inserting* a typed inner unit permanently diverged the outer
+  unit's text hash, blocking it from ever settling back to fresh.) Unaffected
+  ancestors settle back to fresh via the existing hash compare — no spurious
+  re-embeds.
+- Docs (README): AG-UI adapter and the `edit` op surfaced in the stack overview
+  and quickstart; status covers M17–M18; retroactive M17 entries added to the
+  1.0.0 changelog section below.
+
 ## 1.1.0 — 2026-07-05
 
 - **New patch op: `edit`** — exact-substring surgery on string-valued nodes:

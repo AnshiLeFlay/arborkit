@@ -68,20 +68,6 @@ function buildDeps(opts: ArborOpts): TreeDeps {
   };
 }
 
-/** Wrap an idGen so it never mints an id already present in `used` (and records
- *  what it mints) — restoring preserves stored node ids, so a deterministic
- *  generator would otherwise collide and corrupt the node map. */
-function guardIdGen(idGen: IdGen, used: Set<string>): IdGen {
-  return {
-    next: () => {
-      let id = idGen.next();
-      while (used.has(id)) id = idGen.next();
-      used.add(id);
-      return id;
-    },
-  };
-}
-
 function assemble(
   opts: ArborOpts,
   tree: ArtifactTree,
@@ -169,11 +155,8 @@ export async function restoreArbor(opts: ArborOpts): Promise<Arbor | null> {
   if (opts.storage) {
     const stored = await opts.storage.load();
     if (stored) {
-      const guarded: TreeDeps = {
-        ...deps,
-        idGen: guardIdGen(deps.idGen, new Set(stored.nodes.map((n) => n.id))),
-      };
-      const { tree, log } = await restoreArtifact(stored, guarded, vectors);
+      // restoreArtifact guards deps.idGen against collisions with restored node ids.
+      const { tree, log } = await restoreArtifact(stored, deps, vectors);
       return assemble(opts, tree, log, vectors, deps.clock, false);
     }
   }
