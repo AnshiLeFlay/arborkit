@@ -44,6 +44,14 @@ const home = await tools.get({ path: "/pages/home" }); // home.value.content ===
 const refused = await tools.patch({ path: "/plan" }, { op: "set", value: "hacked" });
 // refused.ok === false — out of scope; violations are returned, never thrown
 
+// Agent edits — surgical substring replacement instead of regenerating a block:
+// get the node first, quote `old` from the live value (Claude Code Edit semantics).
+await tools.patch({ path: "/pages/home" }, { op: "set", value: { title: "Home", html: "<p>Bonus: 100% do 2000 PLN</p>" } });
+const edited = await tools.patch(
+  { path: "/pages/home/html" },
+  { op: "edit", old: "100% do 2000 PLN", new: "150% do 3000 PLN" },
+); // unique-or-fail: an ambiguous `old` returns INVALID_OP with the occurrence count
+
 // Semantic search — mutations only mark nodes stale; reindex() embeds:
 await arbor.index!.reindex();
 const found = await arbor.index!.search("home page"); // { results, staleCount }
