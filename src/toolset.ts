@@ -3,6 +3,7 @@ import type { Addressing } from "./addressing";
 import type { EventLog, MutationEvent } from "./event-log";
 import type { Mutator } from "./mutator";
 import type { SemanticIndex } from "./semantic-index";
+import { Replay } from "./replay";
 import {
   Navigator,
   type DescribeOpts,
@@ -69,6 +70,10 @@ export interface Toolset {
   search(query: string, opts?: SearchOpts): Promise<ToolResult<SearchResult>>;
   patch(ref: Ref, op: PatchOp): Promise<ToolResult<PatchResult>>;
   history(ref?: Ref, opts?: { limit?: number }): Promise<ToolResult<MutationEvent[]>>;
+  /** Value of `ref` as of `version` (event-log seq). Read-only time travel; readScope applies. */
+  getAt(ref: Ref, version: number): Promise<ToolResult<{ value: Json | null; existed: boolean }>>;
+  /** Restore `ref` to its value/type/tags as of `toVersion`, as a NEW append-only mutation. writeScope applies. */
+  revert(ref: Ref, toVersion: number): Promise<ToolResult<PatchResult>>;
 }
 
 /** An event is within scope if any of its recorded paths is within scope. */
@@ -94,6 +99,12 @@ async function run<T>(fn: () => T | Promise<T>): Promise<ToolResult<T>> {
 export function makeToolset(deps: ToolsetDeps, binding: ToolsetBinding = {}): Toolset {
   const { tree, addressing } = deps;
   const navigator = new Navigator(tree, addressing);
+  const replay = new Replay(deps.tree, deps.log);
+  const resolve = (r: Ref) => {
+    const node = "id" in r ? addressing.byId(r.id) : addressing.byPath(r.path);
+    if (!node) throw new NodeNotFoundError(r);
+    return node;
+  };
 
   return {
     describe: (ref, opts) =>
@@ -139,11 +150,6 @@ export function makeToolset(deps: ToolsetDeps, binding: ToolsetBinding = {}): To
     patch: (ref, op) =>
       run<PatchResult>(() => {
         const common = { owner: binding.owner, writeScope: binding.writeScope, ifVersion: op.ifVersion };
-        const resolve = (r: Ref) => {
-          const node = "id" in r ? addressing.byId(r.id) : addressing.byPath(r.path);
-          if (!node) throw new NodeNotFoundError(r);
-          return node;
-        };
         switch (op.op) {
           case "set": {
             deps.mutator.set(ref, op.value, common);
@@ -231,6 +237,32 @@ export function makeToolset(deps: ToolsetDeps, binding: ToolsetBinding = {}): To
           events = events.filter((e) => eventWithinScope(e, scope));
         }
         return structuredClone(opts.limit !== undefined ? events.slice(-opts.limit) : events);
+      }),
+
+    getAt: (ref, version) =>
+      run(() => {
+        const node = resolve(ref);
+        const path = addressing.pathOf(node.id);
+        if (!isWithin(path, binding.readScope)) {
+          throw new ScopeViolationError(path, binding.readScope!);
+        }
+        // Throws InvalidOpError below the compaction floor — run() maps it to INVALID_OP.
+        const past = replay.getAt(path, version);
+        return { value: (past ?? null) as Json | null, existed: past !== undefined };
+      }),
+
+    revert: (ref, toVersion) =>
+      run<PatchResult>(() => {
+        const node = resolve(ref);
+        const path = addressing.pathOf(node.id);
+        // Pre-check writeScope like `edit` does: Replay.revert's internal
+        // mutator.set carries no binding, so the scope must be enforced here.
+        if (binding.writeScope !== undefined && !isWithin(path, binding.writeScope)) {
+          throw new ScopeViolationError(path, binding.writeScope);
+        }
+        replay.revert(deps.mutator, addressing, { path }, toVersion);
+        const after = resolve({ path });
+        return { id: after.id, path, version: after.meta.version };
       }),
   };
 }
