@@ -119,24 +119,10 @@ export async function restoreFromDelta(
       );
     }
   }
-  // Guard the id generator: `fromStored` preserves the checkpoint's node ids, but
-  // `deps.idGen` starts fresh, so ids minted while replaying the journal could collide
-  // with restored ids (a collision silently overwrites a live node in the node map and
-  // corrupts the parent chain into a cycle — `pathOf` then never terminates). Skip any
-  // id already in use; deterministic generators (SeqIdGen) simply advance past them.
-  const usedIds = new Set(checkpoint.nodes.map((n) => n.id));
-  const guardedDeps: TreeDeps = {
-    ...deps,
-    idGen: {
-      next: () => {
-        let id = deps.idGen.next();
-        while (usedIds.has(id)) id = deps.idGen.next();
-        usedIds.add(id);
-        return id;
-      },
-    },
-  };
-  const { tree } = await restoreArtifact(checkpoint, guardedDeps, vectors);
+  // `restoreArtifact` guards `deps.idGen` against collisions with the checkpoint's node
+  // ids and keeps the guard on the returned tree's deps — ids minted while replaying the
+  // journal below (and by all later mutations) are collision-safe.
+  const { tree } = await restoreArtifact(checkpoint, deps, vectors);
   const addressing = new Addressing(tree);
   const replayLog = new EventLog(); // throwaway — the faithful log is rebuilt below
   // Mutator hooks are synchronous but the vector port is async — queue removals

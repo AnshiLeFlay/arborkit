@@ -1,6 +1,7 @@
 import type { ArbNode, NodeId } from "./types";
 import { ArtifactTree, type TreeDeps } from "./artifact-tree";
 import { EventLog, type MutationEvent } from "./event-log";
+import { guardIdGen } from "./ids";
 import type { VectorIndexPort, VectorIndexEntry } from "./vector-index-port";
 
 /** A JSON-serializable snapshot of an entire artifact: tree + event-log + vectors.
@@ -37,13 +38,21 @@ export async function serializeArtifact(
   };
 }
 
-/** Rebuild a fresh tree + log from a StoredArtifact, and upsert its vectors into `vectors`. */
+/** Rebuild a fresh tree + log from a StoredArtifact, and upsert its vectors into `vectors`.
+ *  `deps.idGen` is wrapped with `guardIdGen` seeded from the restored node ids: `fromStored`
+ *  preserves stored ids, so a deterministic generator restarted in a new process would
+ *  otherwise re-mint a live id on the next mutation and silently corrupt the tree. The
+ *  guard stays on the returned tree's deps, so ALL post-restore mutations are safe. */
 export async function restoreArtifact(
   stored: StoredArtifact,
   deps: TreeDeps,
   vectors: VectorIndexPort,
 ): Promise<{ tree: ArtifactTree; log: EventLog }> {
-  const tree = ArtifactTree.fromStored(stored.nodes, stored.rootId, deps);
+  const guardedDeps: TreeDeps = {
+    ...deps,
+    idGen: guardIdGen(deps.idGen, new Set(stored.nodes.map((n) => n.id))),
+  };
+  const tree = ArtifactTree.fromStored(stored.nodes, stored.rootId, guardedDeps);
   const log = EventLog.fromStored(stored.events, stored.baseSeq ?? 0);
   await vectors.upsert(stored.vectors);
   return { tree, log };
