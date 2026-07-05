@@ -1,6 +1,6 @@
 {
   "name": "arborkit",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Arbor — a shared, typed, versioned JSON artifact tree for multi-agent systems: lazy navigation, scoped agent tools, exact + semantic indexing, reversible event log with time-travel, snapshot + delta persistence.",
   "keywords": [
     "agents",

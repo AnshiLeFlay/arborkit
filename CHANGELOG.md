@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.1.0 — 2026-07-05
+
+- **New patch op: `edit`** — exact-substring surgery on string-valued nodes:
+  `patch(ref, { op: "edit", old, new, replaceAll?, ifVersion? })`. `old` must occur
+  exactly once in the node's string value (or set `replaceAll`); on a miss or an
+  ambiguous match the op fails with a structured `INVALID_OP` that reports the
+  occurrence count, so an agent can re-quote a larger fragment and retry.
+  Replacement is literal (no `$&`-style pattern expansion). Scope and `ifVersion`
+  are enforced *before* any content inspection — out-of-scope probes get an
+  identical `SCOPE_VIOLATION` whether or not `old` matches, leaking nothing.
+- Under the hood `edit` is pure sugar over `set`: the event log records an ordinary
+  `set` with full before/after, so replay, revert, delta persistence, and the AG-UI
+  adapter need no changes.
+- Motivation: output tokens are ~5× input price on current Claude models. An agent
+  quoting `old`/`new` fragments (~100 output tokens) instead of regenerating a whole
+  block (~1500) is the dominant cost lever for agent-driven editing. Pattern: `get`
+  the node first, quote `old` from the live value — the Claude Code `Edit`-tool
+  semantics.
+
 ## 1.0.1 — 2026-07-03
 
 - **Fix: cross-entry `instanceof` breakage.** 1.0.0 was built without code splitting, so every
