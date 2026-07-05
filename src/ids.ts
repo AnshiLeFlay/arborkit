@@ -16,7 +16,9 @@ export class UuidIdGen implements IdGen {
  *  generator (e.g. SeqIdGen) restarted in a new process would otherwise re-mint
  *  a live id — a collision silently overwrites a live node in the node map and
  *  corrupts the parent chain into a cycle (`pathOf` then never terminates).
- *  Skipped-over ids simply advance deterministic generators past them. */
+ *  Skipped-over ids simply advance deterministic generators past them.
+ *  Contract: the wrapped generator must eventually produce an id not in `used`
+ *  (a constant or exhausted-space generator would loop forever here). */
 export function guardIdGen(idGen: IdGen, used: Set<NodeId>): IdGen {
   return {
     next: () => {
