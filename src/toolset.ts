@@ -70,9 +70,12 @@ export interface Toolset {
   search(query: string, opts?: SearchOpts): Promise<ToolResult<SearchResult>>;
   patch(ref: Ref, op: PatchOp): Promise<ToolResult<PatchResult>>;
   history(ref?: Ref, opts?: { limit?: number }): Promise<ToolResult<MutationEvent[]>>;
-  /** Value of `ref` as of `version` (event-log seq). Read-only time travel; readScope applies. */
+  /** Value of `ref` as of `version` (event-log seq). Read-only time travel; readScope applies.
+   *  Path-addressed at the node's CURRENT path — for an `{id}` ref of a since-moved node this
+   *  reads what occupied its current path back then, not the node's old location. */
   getAt(ref: Ref, version: number): Promise<ToolResult<{ value: Json | null; existed: boolean }>>;
-  /** Restore `ref` to its value/type/tags as of `toVersion`, as a NEW append-only mutation. writeScope applies. */
+  /** Restore `ref` to its value/type/tags as of `toVersion`, as a NEW append-only mutation.
+   *  writeScope applies. Path-addressed at the node's current path (see getAt). */
   revert(ref: Ref, toVersion: number): Promise<ToolResult<PatchResult>>;
 }
 
