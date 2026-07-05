@@ -94,6 +94,55 @@ describe("M18 patch op 'edit' — exact-substring surgery on string leaves", () 
     expect((s.tree.toJson() as { note: string }).note).toBe("keep me intact");
   });
 
+  it("no content oracle: out-of-scope edit returns SCOPE_VIOLATION whether or not `old` matches", async () => {
+    const s = setup({ docs: { a: "in scope" }, secret: "the password is hunter2" });
+    const scoped = makeToolset(
+      { tree: s.tree, addressing: s.addressing, log: s.log, mutator: s.mutator },
+      { writeScope: "/docs" },
+    );
+    const matching = await scoped.patch({ path: "/secret" }, { op: "edit", old: "hunter2", new: "x" });
+    const nonMatching = await scoped.patch({ path: "/secret" }, { op: "edit", old: "hunter3", new: "x" });
+    expect(matching.ok).toBe(false);
+    expect(nonMatching.ok).toBe(false);
+    if (!matching.ok && !nonMatching.ok) {
+      // Identical error either way — differing codes would let an agent
+      // binary-search out-of-scope content via "not found" vs scope errors.
+      expect(matching.error.code).toBe("SCOPE_VIOLATION");
+      expect(nonMatching.error.code).toBe("SCOPE_VIOLATION");
+      expect(nonMatching.error).toEqual(matching.error);
+    }
+    expect((s.tree.toJson() as { secret: string }).secret).toBe("the password is hunter2");
+    expect([...s.log.entries()].length).toBe(0);
+  });
+
+  it("stale ifVersion wins over content checks: version mismatch + non-matching old → STALE_VERSION, not INVALID_OP", async () => {
+    const s = setup();
+    const bump = await s.ts.patch({ path: "/docs/a" }, { op: "set", value: "fresh text" });
+    expect(bump.ok).toBe(true);
+    if (bump.ok) expect(bump.value.version).toBe(1);
+    const r = await s.ts.patch({ path: "/docs/a" }, { op: "edit", old: "nonexistent", new: "x", ifVersion: 0 });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error.code).toBe("STALE_VERSION");
+  });
+
+  it("null leaf → INVALID_OP saying the target is null (not 'object')", async () => {
+    const s = setup({ docs: { a: null } });
+    const r = await s.ts.patch({ path: "/docs/a" }, { op: "edit", old: "x", new: "y" });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.error.code).toBe("INVALID_OP");
+      expect(r.error.message).toContain("is null");
+      expect(r.error.message).not.toContain("is object");
+    }
+  });
+
+  it("new: '' deletes the fragment", async () => {
+    const s = setup({ docs: { a: "keep DELETE keep" } });
+    const r = await s.ts.patch({ path: "/docs/a" }, { op: "edit", old: " DELETE", new: "" });
+    expect(r.ok).toBe(true);
+    expect((s.tree.toJson() as { docs: { a: string } }).docs.a).toBe("keep keep");
+  });
+
   it("stale ifVersion → STALE_VERSION", async () => {
     const s = setup();
     const first = await s.ts.patch({ path: "/docs/a" }, { op: "edit", old: "2000", new: "2500" });

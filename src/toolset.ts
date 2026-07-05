@@ -14,7 +14,14 @@ import {
   type FindResult,
 } from "./navigator";
 import type { SearchOpts, SearchResult } from "./semantic-index";
-import { type Ref, ArborError, ScopeViolationError, InvalidOpError, NodeNotFoundError } from "./errors";
+import {
+  type Ref,
+  ArborError,
+  ScopeViolationError,
+  StaleVersionError,
+  InvalidOpError,
+  NodeNotFoundError,
+} from "./errors";
 import { isWithin } from "./jsonpointer";
 import type { Json, NodeId } from "./types";
 
@@ -164,9 +171,27 @@ export function makeToolset(deps: ToolsetDeps, binding: ToolsetBinding = {}): To
           case "edit": {
             const node = resolve(ref);
             const path = addressing.pathOf(node.id);
+            // Scope, then version, then content — the Mutator's own ordering. The
+            // content checks below read the live value, so they must not run first:
+            // "not found" vs SCOPE_VIOLATION would be a binary-search oracle on
+            // out-of-scope content, and INVALID_OP on a stale read sends the agent
+            // chasing a "wrong quote" instead of re-getting.
+            if (binding.writeScope !== undefined && !isWithin(path, binding.writeScope)) {
+              throw new ScopeViolationError(path, binding.writeScope);
+            }
+            if (op.ifVersion !== undefined && node.meta.version !== op.ifVersion) {
+              throw new StaleVersionError(node.id, op.ifVersion, node.meta.version);
+            }
             const value = tree.toJson(node.id);
             if (typeof value !== "string") {
-              const kind = Array.isArray(value) ? "an array" : typeof value;
+              const kind =
+                value === null
+                  ? "null"
+                  : Array.isArray(value)
+                    ? "an array"
+                    : typeof value === "object"
+                      ? "an object"
+                      : `a ${typeof value}`;
               throw new InvalidOpError(
                 `edit targets string values; ${path} is ${kind} — target a string field inside it`,
               );
