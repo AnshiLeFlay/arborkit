@@ -81,13 +81,28 @@ export class SemanticIndex {
       node.meta.embedding = { state: "none" };
       this.pendingRemoval.add(node.id);
       this.stale.delete(node.id);
-      // The owning typed unit's embed text covers this shard — re-hash IT.
-      // (Terminates: the ancestor has its own embedText, so it takes the
-      // normal branch below.)
-      const anc = this.embedTextAncestor(node);
-      if (anc) this.onChange(anc);
-      return;
+    } else {
+      this.refresh(node);
     }
+    // embedText units can NEST: EVERY embedText-typed ancestor's embed text may
+    // cover this subtree — not just the nearest owning unit — so re-hash them ALL
+    // up to the root. `refresh`'s hash compare settles unaffected units (e.g. an
+    // outer unit whose text ignores this subtree) without queueing a re-embed.
+    let pid = node.parentId;
+    while (pid !== null) {
+      const anc = this.tree.get(pid);
+      if (!anc) break;
+      const ancDef = anc.type ? this.registry?.get(anc.type) : undefined;
+      if (ancDef?.embedText) this.refresh(anc);
+      pid = anc.parentId;
+    }
+  }
+
+  /** Recompute `node`'s own embed text and reconcile its state: unembeddable →
+   *  "none" (+queued removal), unchanged fresh hash → no-op, otherwise "stale".
+   *  Callers guarantee `node` is not a suppressed shard (a node with its own
+   *  typed embedText never is). */
+  private refresh(node: ArbNode): void {
     const value = this.tree.toJson(node.id);
     const typeDef = node.type ? this.registry?.get(node.type) : undefined;
     const text = toEmbeddingText(node, value, typeDef);
