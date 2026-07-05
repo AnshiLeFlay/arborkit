@@ -48,3 +48,8 @@ First public release of Arbor as `arborkit`. The milestone arc:
 - Hardening round 2: move guards, aliasing hygiene, interleave-safe reindex, tags recorded in events, move-aware revert (M14).
 - API polish: async `VectorIndexPort`, `patch` returns `{id, path, version}`, `find` returns `{hits, truncated}`, single `isWithin` scope helper (M15).
 - `createArbor`/`restoreArbor` facade — one-call wiring, guarded restore, auto-checkpoint on first `saveDelta` — and published as `arborkit` (M15–M16).
+- Performance overhaul: clone-once replay (~640× on long logs), O(1) child lookup by key, incremental glob `find`, Float32 normalized vectors (dot-product search; `number[]` persist format kept), plus `npm run bench` micro-benchmarks (M17).
+- Zero-dep AG-UI adapter: `snapshotEvent`/`deltaSince`/`toJsonPatch` — STATE_SNAPSHOT + STATE_DELTA (RFC 6902) over the tree/log; `deltaSince` below the compaction floor throws so consumers re-send a snapshot (M17).
+- Semantic-unit staleness: writes/moves/removes inside a shard re-mark the owning `embedText` ancestor stale; move/remove fire index hooks (M17).
+
+*(The three M17 bullets above shipped in 1.0.0 but were missing from this entry — added retroactively.)*

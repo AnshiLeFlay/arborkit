@@ -15,18 +15,20 @@ ESM-only, Node ≥ 20.6.
 
 - **Tree** — decompose a JSON value into addressable nodes (stable ids + JSON-Pointer paths), reconstruct any subtree.
 - **Mutations** — `set`/`insert`/`remove`/`move` with scope + optimistic-version guards, recorded in a reversible event log; atomic transactions.
+- **Agent edits** — `patch {op: "edit", old, new}`: exact-substring surgery on a string leaf (Claude Code `Edit`-tool semantics — unique `old` or a structured failure with the occurrence count). Pure sugar over `set`, so history/revert/deltas need nothing new; the agent emits ~100 tokens of arguments instead of regenerating a whole block.
 - **Types** — optional per-type validation + decomposition override (`TypeRegistry`); a structural Zod adapter (zod is a dev-only dependency).
 - **Navigate** — `describe`/`get`/`find` (by id, path, tag, or glob) — depth-bounded and paginated; `find` returns `{hits, truncated}` so truncation is never silent.
 - **Semantic index** — per-node embeddings via pluggable `EmbeddingPort`/`VectorIndexPort` (async — DB-backed adapters welcome); `search` by meaning returns `{results, staleCount}`, off the mutation path (mutations only mark stale; an async reindexer embeds).
 - **Storage** — serialize the whole artifact (tree + log + vectors) to memory or a JSON file; or persist incrementally (checkpoint + appendable NDJSON journal); restore intact either way.
 - **Replay** — reconstruct any past version, `diff` two versions, `revert` a node (append-only, path-addressed).
-- **Toolset** — hand an agent a scoped, async, structured-result bundle: `describe`/`get`/`find`/`search`/`patch`/`history`. Writes are confined to `writeScope`, reads to `readScope`; errors are returned, never thrown across the boundary. `patch` returns `{id, path, version}` of the touched node.
+- **Toolset** — hand an agent a scoped, async, structured-result bundle: `describe`/`get`/`find`/`search`/`patch`/`history` (`patch` ops: `set`/`insert`/`remove`/`move`/`edit`). Writes are confined to `writeScope`, reads to `readScope`; errors are returned, never thrown across the boundary. `patch` returns `{id, path, version}` of the touched node.
+- **AG-UI adapter** — expose the tree + log as [AG-UI](https://docs.ag-ui.com) shared-state events: `snapshotEvent` (STATE_SNAPSHOT) + `deltaSince` (STATE_DELTA with RFC 6902 JSON Patch ops). Zero-dep — plain objects shaped like AG-UI events, no AG-UI SDK required.
 - **Facade** — `createArbor`/`restoreArbor` wire all of the above in one call.
 
 ## Quickstart
 
 ```ts
-import { createArbor, restoreArbor, MockEmbeddingPort, MemoryDeltaStorage, sizeBasedDecision } from "arborkit";
+import { createArbor, restoreArbor, MockEmbeddingPort, MemoryDeltaStorage, sizeBasedDecision, snapshotEvent, deltaSince } from "arborkit";
 
 const delta = new MemoryDeltaStorage();
 const arbor = createArbor({
@@ -58,6 +60,13 @@ const found = await arbor.index!.search("home page"); // { results, staleCount }
 
 // Incremental persistence — the first saveDelta() auto-checkpoints:
 await arbor.saveDelta();
+
+// AG-UI shared-state stream — snapshot once, then RFC 6902 deltas per poll:
+let cursor = arbor.log.length();
+const snap = snapshotEvent(arbor.tree); // { type: "STATE_SNAPSHOT", snapshot }
+// ...after more mutations:
+const { event, nextSeq } = deltaSince(arbor.log, cursor); // { type: "STATE_DELTA", delta: [...] }
+cursor = nextSeq; // throws below the compaction floor — re-send a fresh snapshot then
 
 // Later (e.g. a new process): restore, then time-travel:
 const restored = await restoreArbor({ decompose: sizeBasedDecision(1), embedding: new MockEmbeddingPort(), delta });
@@ -126,6 +135,7 @@ npm run example   # narrated end-to-end content-site scenario (examples/content-
 npm test          # vitest
 npm run typecheck # tsc --noEmit
 npm run build     # tsup → dist/ (ESM + type declarations)
+npm run bench     # micro-benchmarks (replay, navigation, glob find, vector search)
 ```
 
 Subpath imports work too: `import { Replay } from "arborkit/replay";` — every
@@ -137,6 +147,6 @@ Design spec and milestone plans live in [`docs/superpowers/`](docs/superpowers/)
 
 ## Status
 
-**v1 core complete (M1–M9), hardened (M10), packaged (M11), log compaction (M12), delta persistence (M13), hardening-2 (M14), API polish + facade (M15), published as arborkit (M16):** tree, mutations + reversible log, optional types, exact navigation, semantic index, storage, replay/time-travel, scoped agent toolset, end-to-end scenario, index-lifecycle hardening, and an installable ESM build.
+**v1 core complete (M1–M9), hardened (M10), packaged (M11), log compaction (M12), delta persistence (M13), hardening-2 (M14), API polish + facade (M15), published as arborkit (M16), perf + AG-UI adapter (M17), agent `edit` op (M18):** tree, mutations + reversible log, optional types, exact navigation, semantic index, storage, replay/time-travel, scoped agent toolset, end-to-end scenario, index-lifecycle hardening, an installable ESM build, an AG-UI shared-state adapter, and token-cheap agent edits.
 
 Deferred (post-v1): LangChain `tool()` / MCP-server adapters over the toolset; `getAt`/`revert` as toolset methods; DB-backed storage & vector adapters (SQLite/sqlite-vec, Postgres/pgvector); a CRDT backend.
