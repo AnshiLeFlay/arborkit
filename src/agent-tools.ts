@@ -133,7 +133,9 @@ const TOOL_NAMES: readonly AgentToolName[] = [
   "revert",
 ];
 
-/** The ready-made tool definitions, freshly built on each call (safe to mutate).
+/** The ready-made tool definitions, freshly built on each call — safe to EXTEND
+ *  (add keys, clone-and-augment); the shared leaf schema constants are frozen,
+ *  so overwriting a leaf's fields throws in strict mode.
  *  `include` filters to a subset, preserving the canonical order above. */
 export function agentToolDefs(opts: { include?: AgentToolName[] } = {}): AgentToolDef[] {
   const defs = makeDefs();
@@ -262,7 +264,12 @@ export function makeToolExecutor(
     opts.include === undefined ? TOOL_NAMES : TOOL_NAMES.filter((n) => opts.include!.includes(n));
   return async (toolName, input) => {
     if (!(allowed as readonly string[]).includes(toolName)) {
-      return errorResult("UNKNOWN_TOOL", `unknown tool ${toolName}; available: ${allowed.join(", ")}`);
+      return errorResult(
+        "UNKNOWN_TOOL",
+        allowed.length === 0
+          ? `unknown tool ${toolName}; no tools are enabled`
+          : `unknown tool ${toolName}; available: ${allowed.join(", ")}`,
+      );
     }
     const name = toolName as AgentToolName;
     if (typeof input !== "object" || input === null || Array.isArray(input)) {

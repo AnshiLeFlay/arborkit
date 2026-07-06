@@ -371,6 +371,26 @@ describe("M19 agent-tools — review follow-ups", () => {
     expect(JSON.stringify(s.tree.toJson())).toBe(before);
   });
 
+  it("set_value with null is ALLOWED — null is valid Json, only undefined is rejected", async () => {
+    const s = setup();
+    const exec = makeToolExecutor(s.ts);
+    const parsed = parse(await exec("set_value", { path: "/pages/home/title", value: null }));
+    expect(parsed.ok).toBe(true);
+    const got = parse(await exec("get", { path: "/pages/home/title" }));
+    if (got.ok) expect(got.value.content).toBeNull();
+  });
+
+  it("include: [] means nothing is enabled — UNKNOWN_TOOL says so instead of a dangling list", async () => {
+    const s = setup();
+    const exec = makeToolExecutor(s.ts, { include: [] });
+    const parsed = parse(await exec("get", { path: "/pages/home" }));
+    expect(parsed.ok).toBe(false);
+    if (!parsed.ok) {
+      expect(parsed.error.code).toBe("UNKNOWN_TOOL");
+      expect(parsed.error.message).toContain("no tools are enabled");
+    }
+  });
+
   it("shared schema leaves are frozen: mutating one throws and does not contaminate future defs", () => {
     const defs = agentToolDefs();
     const getDef = defs.find((d) => d.name === "get")!;
