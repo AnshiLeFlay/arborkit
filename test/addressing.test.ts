@@ -4,6 +4,7 @@ import { Addressing } from "../src/addressing";
 import { SeqIdGen } from "../src/ids";
 import { FixedClock } from "../src/clock";
 import { sizeBasedDecision } from "../src/decompose";
+import { InvalidOpError } from "../src/errors";
 
 function buildTree(): ArtifactTree {
   const deps: TreeDeps = {
@@ -41,6 +42,19 @@ describe("Addressing", () => {
     const tree = buildTree();
     const addr = new Addressing(tree);
     expect(addr.byPath("/pages/9/title")).toBeUndefined();
+  });
+
+  it("pathOf throws on a parent-chain cycle instead of hanging", () => {
+    const tree = buildTree();
+    const addr = new Addressing(tree);
+    const pages = addr.byPath("/pages")!;
+    const item = addr.byPath("/pages/0")!;
+    // white-box corruption: make the two nodes each other's parent
+    (pages as any).parentId = item.id;
+    (item as any).parentId = pages.id;
+    expect(() => addr.pathOf(item.id)).toThrow(InvalidOpError);
+    expect(() => addr.pathOf(item.id)).toThrow(/parent chain cycle/);
+    expect(() => addr.pathOf(item.id)).toThrow(new RegExp(item.id));
   });
 
   it("round-trips path<->id for every node in the tree", () => {

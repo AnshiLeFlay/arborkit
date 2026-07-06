@@ -321,6 +321,113 @@ describe("M19 agent-tools — review follow-ups", () => {
     expect(JSON.stringify(tree.toJson())).toBe(before); // toolset not called
   });
 
+  it("executor include filter: excluded tool → UNKNOWN_TOOL listing only the included names", async () => {
+    const s = setup();
+    const exec = makeToolExecutor(s.ts, { include: ["get", "edit"] });
+
+    const got = parse(await exec("get", { path: "/pages/home/html" }));
+    expect(got.ok).toBe(true);
+
+    const before = JSON.stringify(s.tree.toJson());
+    const reverted = parse(await exec("revert", { path: "/pages/home/html", version: 0 }));
+    expect(reverted.ok).toBe(false);
+    if (!reverted.ok) {
+      expect(reverted.error.code).toBe("UNKNOWN_TOOL");
+      expect(reverted.error.message).toContain("revert");
+      expect(reverted.error.message).toContain("get");
+      expect(reverted.error.message).toContain("edit");
+      for (const name of ALL_NAMES.filter((n) => n !== "get" && n !== "edit" && n !== "revert")) {
+        expect(reverted.error.message).not.toContain(name);
+      }
+    }
+    expect(JSON.stringify(s.tree.toJson())).toBe(before); // toolset not called
+
+    // history is also outside the include set
+    const hist = parse(await exec("history", {}));
+    expect(hist.ok).toBe(false);
+    if (!hist.ok) expect(hist.error.code).toBe("UNKNOWN_TOOL");
+  });
+
+  it("executor without include still dispatches all nine (back-compat)", async () => {
+    const s = setup();
+    const exec = makeToolExecutor(s.ts);
+    for (const name of ALL_NAMES) {
+      const r = parse(await exec(name, {}));
+      // never UNKNOWN_TOOL — every name reaches validation/dispatch
+      if (!r.ok) expect(r.error.code).not.toBe("UNKNOWN_TOOL");
+    }
+  });
+
+  it("set_value with an explicit undefined value → INVALID_INPUT, tree unchanged", async () => {
+    const s = setup();
+    const exec = makeToolExecutor(s.ts);
+    const before = JSON.stringify(s.tree.toJson());
+    const parsed = parse(await exec("set_value", { path: "/pages/home/title", value: undefined }));
+    expect(parsed.ok).toBe(false);
+    if (!parsed.ok) {
+      expect(parsed.error.code).toBe("INVALID_INPUT");
+      expect(parsed.error.message).toContain("value");
+    }
+    expect(JSON.stringify(s.tree.toJson())).toBe(before);
+  });
+
+  it("set_value with null is ALLOWED — null is valid Json, only undefined is rejected", async () => {
+    const s = setup();
+    const exec = makeToolExecutor(s.ts);
+    const parsed = parse(await exec("set_value", { path: "/pages/home/title", value: null }));
+    expect(parsed.ok).toBe(true);
+    const got = parse(await exec("get", { path: "/pages/home/title" }));
+    if (got.ok) expect(got.value.content).toBeNull();
+  });
+
+  it("include: [] means nothing is enabled — UNKNOWN_TOOL says so instead of a dangling list", async () => {
+    const s = setup();
+    const exec = makeToolExecutor(s.ts, { include: [] });
+    const parsed = parse(await exec("get", { path: "/pages/home" }));
+    expect(parsed.ok).toBe(false);
+    if (!parsed.ok) {
+      expect(parsed.error.code).toBe("UNKNOWN_TOOL");
+      expect(parsed.error.message).toContain("no tools are enabled");
+    }
+  });
+
+  it("shared schema leaves are frozen: mutating one throws and does not contaminate future defs", () => {
+    const defs = agentToolDefs();
+    const getDef = defs.find((d) => d.name === "get")!;
+    const props = getDef.schema["properties"] as Record<string, Record<string, unknown>>;
+    expect(() => {
+      props["path"]!["description"] = "x";
+    }).toThrow(TypeError);
+    // the next call is uncontaminated
+    const fresh = agentToolDefs().find((d) => d.name === "get")!;
+    const freshProps = fresh.schema["properties"] as Record<string, Record<string, unknown>>;
+    expect(freshProps["path"]!["description"]).toBeUndefined();
+  });
+
+  it("clone-and-extend of a def keeps working (frozen leaves, unfrozen built defs)", () => {
+    const editDef = agentToolDefs().find((d) => d.name === "edit")!;
+    // the documented consumer pattern: clone properties, add a NEW key
+    const extended = {
+      ...editDef,
+      schema: {
+        ...editDef.schema,
+        properties: {
+          ...(editDef.schema["properties"] as Record<string, unknown>),
+          force: { type: "boolean", description: "skip the tag-balance guard" },
+        },
+      },
+    };
+    const extProps = extended.schema.properties as Record<string, unknown>;
+    expect(Object.keys(extProps)).toContain("force");
+    expect(Object.keys(extProps)).toContain("old");
+    // adding a new key directly on the per-call built properties object also works
+    (editDef.schema["properties"] as Record<string, unknown>)["force"] = { type: "boolean" };
+    expect(Object.keys(editDef.schema["properties"] as Record<string, unknown>)).toContain("force");
+    // ...and does not leak into the next call
+    const fresh = agentToolDefs().find((d) => d.name === "edit")!;
+    expect(Object.keys(fresh.schema["properties"] as Record<string, unknown>)).not.toContain("force");
+  });
+
   it("search dispatches (query, {k}) through a real semantic index", async () => {
     const deps: TreeDeps = { idGen: new SeqIdGen(), clock: new FixedClock(0), decision: sizeBasedDecision(1) };
     const tree = ArtifactTree.fromJson({ pages: {} }, deps);
