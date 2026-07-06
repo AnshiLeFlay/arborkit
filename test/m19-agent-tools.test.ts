@@ -296,3 +296,52 @@ describe("M19 agent-tools — EXECUTOR_ERROR never throws", () => {
     }
   });
 });
+
+describe("M19 agent-tools — review follow-ups", () => {
+  it("a guard returning undefined (plain-JS allow path) allows the call", async () => {
+    const { ts } = setup();
+    // deliberately violates the ToolGuard return type the way untyped JS would
+    const guard = (() => undefined) as unknown as ToolGuard;
+    const exec = makeToolExecutor(ts, { guard });
+    const parsed = parse(await exec("get", { path: "/pages/home/title" }));
+    expect(parsed.ok).toBe(true);
+  });
+
+  it("a malformed truthy guard return is normalized to a well-formed GUARD_REFUSED", async () => {
+    const { ts, tree } = setup();
+    const before = JSON.stringify(tree.toJson());
+    const guard = (() => "nope") as unknown as ToolGuard;
+    const exec = makeToolExecutor(ts, { guard });
+    const parsed = parse(await exec("edit", { path: "/pages/home/title", old: "Home", new: "X" }));
+    expect(parsed.ok).toBe(false);
+    if (!parsed.ok) {
+      expect(parsed.error.code).toBe("GUARD_REFUSED");
+      expect(parsed.error.message).toBe("nope");
+    }
+    expect(JSON.stringify(tree.toJson())).toBe(before); // toolset not called
+  });
+
+  it("search dispatches (query, {k}) through a real semantic index", async () => {
+    const deps: TreeDeps = { idGen: new SeqIdGen(), clock: new FixedClock(0), decision: sizeBasedDecision(1) };
+    const tree = ArtifactTree.fromJson({ pages: {} }, deps);
+    const addressing = new Addressing(tree);
+    const log = new EventLog();
+    const { MemoryVectorIndex } = await import("../src/vector-index-port");
+    const { MockEmbeddingPort } = await import("../src/embedding-port");
+    const { SemanticIndex } = await import("../src/semantic-index");
+    const index = new SemanticIndex(tree, addressing, new MockEmbeddingPort(), new MemoryVectorIndex());
+    const mutator = new Mutator(tree, addressing, log, { clock: new FixedClock(0), ...index.hooks() });
+    const ts = makeToolset({ tree, addressing, log, mutator, index }, {});
+    // initial fromJson content never passes the index hooks — write via mutations
+    mutator.insert({ path: "/pages" }, "a", "casino bonus offers");
+    mutator.insert({ path: "/pages" }, "b", "contact form");
+    await index.reindex();
+    const exec = makeToolExecutor(ts);
+    const parsed = parse(await exec("search", { query: "casino bonus offers", k: 1 }));
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) {
+      expect(parsed.value.results.length).toBe(1);
+      expect(parsed.value.results[0].path).toBe("/pages/a");
+    }
+  });
+});

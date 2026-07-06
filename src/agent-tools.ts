@@ -91,7 +91,13 @@ function makeDefs(): AgentToolDef[] {
       name: "set_value",
       description:
         "Replace a node's entire value. Expensive and rarely needed — prefer edit for changes inside existing content.",
-      schema: { type: "object", properties: { path: str, value: {} }, required: ["path", "value"] },
+      schema: {
+        type: "object",
+        // bare-schema property ({} = "any JSON") with a description so stricter
+        // OpenAPI-subset converters and the model both get a hint
+        properties: { path: str, value: { description: "The new value — any JSON" } },
+        required: ["path", "value"],
+      },
     },
     {
       name: "history",
@@ -253,8 +259,19 @@ export function makeToolExecutor(
     let result: ToolResult<unknown>;
     try {
       const dispatch = plan(name, inp);
+      // `!= null` so a plain-JS guard that returns undefined on its allow path
+      // allows (only a real refusal object refuses); a malformed truthy return
+      // is normalized so the agent always sees a well-formed ToolResult error.
       const refusal = opts.guard !== undefined ? opts.guard(name, inp) : null;
-      if (refusal !== null) return JSON.stringify({ ok: false, error: refusal });
+      if (refusal != null) {
+        const wellFormed =
+          typeof refusal === "object" &&
+          typeof (refusal as { code?: unknown }).code === "string" &&
+          typeof (refusal as { message?: unknown }).message === "string"
+            ? refusal
+            : { code: "GUARD_REFUSED", message: String(refusal) };
+        return JSON.stringify({ ok: false, error: wellFormed });
+      }
       result = await dispatch(toolset);
     } catch (err) {
       if (err instanceof InputError) return errorResult("INVALID_INPUT", err.message);
