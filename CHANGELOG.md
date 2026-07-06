@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.2.1 — 2026-07-06
+
+Feedback round from the first production consumer adopting `arborkit/agent-tools`
+(the module's own round-trip validation), plus one robustness guard:
+
+- **`makeToolExecutor` gains `include`** — the executor's dispatch surface can now
+  match the bound tool subset: calls outside `include` return `UNKNOWN_TOOL`
+  listing only the enabled names (previously a consumer binding six defs had an
+  executor that silently dispatched all nine — including `revert`, a write).
+  Absent `include` = all nine, message unchanged (back-compatible).
+- **`set_value` rejects `value: undefined`** — previously an explicit undefined
+  passed the key-presence check and was WRITTEN into the tree. `null` remains a
+  valid value (it is valid Json); only undefined is rejected.
+- **Shared leaf schema constants are frozen** — mutating e.g.
+  `properties.path` on a returned def contaminated every other def and every
+  future `agentToolDefs()` call. Defs stay safe to EXTEND (clone-and-augment,
+  adding new keys) — the documented consumer pattern is unaffected.
+- **`Addressing.pathOf` throws on parent-chain cycles** (`INVALID_OP`) instead of
+  hanging in a synchronous infinite loop — insurance against any future
+  corruption vector; valid trees are unaffected.
+- Package metadata now points at the GitHub repository
+  (github.com/AnshiLeFlay/arborkit).
+
 ## 1.2.0 — 2026-07-06
 
 - **Agent bridge: `agentToolDefs` + `makeToolExecutor`** (new module
