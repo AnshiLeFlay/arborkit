@@ -44,9 +44,12 @@ export type ToolGuard = (
   input: Record<string, unknown>,
 ) => { code: string; message: string } | null;
 
-const str = { type: "string" } as const;
-const int = { type: "integer" } as const;
-const bool = { type: "boolean" } as const;
+// Shared across every def and every agentToolDefs() call — frozen so a consumer
+// mutating one leaf can't silently contaminate other defs / future calls.
+// (The built def objects themselves stay unfrozen: clone-and-extend is supported.)
+const str = Object.freeze({ type: "string" } as const);
+const int = Object.freeze({ type: "integer" } as const);
+const bool = Object.freeze({ type: "boolean" } as const);
 
 function makeDefs(): AgentToolDef[] {
   return [
@@ -212,7 +215,11 @@ function plan(toolName: AgentToolName, inp: Record<string, unknown>): Dispatch {
     }
     case "set_value": {
       const path = requireString(inp, "path");
-      if (!("value" in inp)) throw new InputError(`field "value" is required`);
+      // explicit !== undefined: `{value: undefined}` from code (unreachable via
+      // JSON tool calls) must not write undefined into the tree
+      if (!("value" in inp) || inp["value"] === undefined) {
+        throw new InputError(`field "value" must be present and not undefined (required)`);
+      }
       const value = inp["value"] as Json;
       return (ts) => ts.patch({ path }, { op: "set", value });
     }
@@ -241,15 +248,21 @@ function errorResult(code: string, message: string): string {
 /** A never-throw (toolName, input) → JSON-string executor over a Toolset — hand the
  *  returned function to your agent's tool-call loop. Errors come back serialized:
  *  UNKNOWN_TOOL, INVALID_INPUT, the guard's own refusal, TOO_LARGE (ok results over
- *  `maxResultChars`, default DEFAULT_MAX_RESULT_CHARS), or EXECUTOR_ERROR (catch-all). */
+ *  `maxResultChars`, default DEFAULT_MAX_RESULT_CHARS), or EXECUTOR_ERROR (catch-all).
+ *  Pass the same `include` you gave `agentToolDefs` so the executor surface matches
+ *  the bound defs — excluded tools come back as UNKNOWN_TOOL listing only the
+ *  included names. Default (absent) = all nine. */
 export function makeToolExecutor(
   toolset: Toolset,
-  opts: { maxResultChars?: number; guard?: ToolGuard } = {},
+  opts: { maxResultChars?: number; guard?: ToolGuard; include?: AgentToolName[] } = {},
 ): (toolName: string, input: unknown) => Promise<string> {
   const cap = opts.maxResultChars ?? DEFAULT_MAX_RESULT_CHARS;
+  // intersect with TOOL_NAMES (canonical order, drops garbage from untyped JS callers)
+  const allowed: readonly AgentToolName[] =
+    opts.include === undefined ? TOOL_NAMES : TOOL_NAMES.filter((n) => opts.include!.includes(n));
   return async (toolName, input) => {
-    if (!(TOOL_NAMES as readonly string[]).includes(toolName)) {
-      return errorResult("UNKNOWN_TOOL", `unknown tool ${toolName}; available: ${TOOL_NAMES.join(", ")}`);
+    if (!(allowed as readonly string[]).includes(toolName)) {
+      return errorResult("UNKNOWN_TOOL", `unknown tool ${toolName}; available: ${allowed.join(", ")}`);
     }
     const name = toolName as AgentToolName;
     if (typeof input !== "object" || input === null || Array.isArray(input)) {
