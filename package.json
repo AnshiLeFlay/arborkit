@@ -39,6 +39,10 @@
       "types": "./dist/ag-ui.d.ts",
       "import": "./dist/ag-ui.js"
     },
+    "./agent-tools": {
+      "types": "./dist/agent-tools.d.ts",
+      "import": "./dist/agent-tools.js"
+    },
     "./arbor": {
       "types": "./dist/arbor.d.ts",
       "import": "./dist/arbor.js"
