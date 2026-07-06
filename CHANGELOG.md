@@ -1,5 +1,40 @@
 # Changelog
 
+## 1.2.0 — 2026-07-06
+
+- **Agent bridge: `agentToolDefs` + `makeToolExecutor`** (new module
+  `arborkit/agent-tools`, also in the root barrel) — the generic extraction of a
+  production consumer's reviewed LLM↔Arbor bridge:
+  - `agentToolDefs()` returns 9 ready-made tool definitions (`search`, `find`,
+    `describe`, `get`, `edit`, `set_value`, `history`, `get_at`, `revert`) as
+    plain JSON Schema object literals — zero runtime deps. LangChain's
+    `bindTools` accepts them as-is; the Anthropic SDK needs one line:
+    `defs.map((d) => ({ name: d.name, description: d.description, input_schema: d.schema }))`.
+  - `makeToolExecutor(toolset, opts?)` returns a never-throw
+    `(toolName, input) → Promise<JSON string>` dispatcher for the tool-call
+    loop: `UNKNOWN_TOOL` / `INVALID_INPUT` on bad calls, `TOO_LARGE` with a
+    narrow-and-retry hint when an ok result exceeds `maxResultChars` (default
+    `DEFAULT_MAX_RESULT_CHARS` = 20 000; error results are never capped), and
+    `EXECUTOR_ERROR` as the belt-and-braces catch-all. The toolset's own
+    structured errors (scope violations, ambiguous edits, …) pass through
+    serialized.
+  - `guard` hook (`ToolGuard`) — a pre-execution veto for domain rules (e.g. an
+    HTML tag-balance check): return `{code, message}` to refuse (serialized back
+    as `{ok: false, error}`; the toolset is NOT called) or `null` to allow.
+- **Toolset `getAt`/`revert`** — scoped time-travel read + append-only undo,
+  closing the long-deferred item. `getAt(ref, version)` returns
+  `{value, existed}` as of a past event-log seq (readScope applies; below the
+  compaction floor it returns `INVALID_OP`, never throws). `revert(ref, toVersion)`
+  restores the node's value/type/tags as a NEW append-only mutation — prior
+  history stays intact (writeScope pre-checked like `edit`, since
+  `Replay.revert` itself carries no binding). Both are path-addressed at the
+  node's CURRENT path — for an `{id}` ref of a since-moved node they operate on
+  what occupied its current path back then, not the node's old location.
+  NOTE: `revert` takes no `ifVersion` — a concurrent write landing between an
+  agent's `get_at` check and its `revert` is not CAS-guarded. The revert's
+  outcome is deterministic regardless (it restores the state at `toVersion`);
+  an `ifVersion` guard can be added later if demanded.
+
 ## 1.1.1 — 2026-07-06
 
 - **Fix: `restoreArtifact` now guards against id collisions.** A deterministic

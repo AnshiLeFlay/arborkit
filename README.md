@@ -21,14 +21,15 @@ ESM-only, Node ≥ 20.6.
 - **Semantic index** — per-node embeddings via pluggable `EmbeddingPort`/`VectorIndexPort` (async — DB-backed adapters welcome); `search` by meaning returns `{results, staleCount}`, off the mutation path (mutations only mark stale; an async reindexer embeds).
 - **Storage** — serialize the whole artifact (tree + log + vectors) to memory or a JSON file; or persist incrementally (checkpoint + appendable NDJSON journal); restore intact either way.
 - **Replay** — reconstruct any past version, `diff` two versions, `revert` a node (append-only, path-addressed).
-- **Toolset** — hand an agent a scoped, async, structured-result bundle: `describe`/`get`/`find`/`search`/`patch`/`history` (`patch` ops: `set`/`insert`/`remove`/`move`/`edit`). Writes are confined to `writeScope`, reads to `readScope`; errors are returned, never thrown across the boundary. `patch` returns `{id, path, version}` of the touched node.
+- **Toolset** — hand an agent a scoped, async, structured-result bundle: `describe`/`get`/`find`/`search`/`patch`/`history`/`getAt`/`revert` (`patch` ops: `set`/`insert`/`remove`/`move`/`edit`; `getAt`/`revert` = scoped time-travel read + append-only undo). Writes are confined to `writeScope`, reads to `readScope`; errors are returned, never thrown across the boundary. `patch` returns `{id, path, version}` of the touched node.
+- **Agent bridge** — `agentToolDefs()`: 9 ready-made LLM tool definitions as plain JSON Schema literals (LangChain `bindTools` takes them as-is; Anthropic SDK via a one-line `input_schema` mapping) + `makeToolExecutor(toolset)`: a never-throw `(toolName, input) → JSON string` executor for the tool-call loop, with input validation, a result-size cap, and a `guard` hook for domain rules.
 - **AG-UI adapter** — expose the tree + log as [AG-UI](https://docs.ag-ui.com) shared-state events: `snapshotEvent` (STATE_SNAPSHOT) + `deltaSince` (STATE_DELTA with RFC 6902 JSON Patch ops). Zero-dep — plain objects shaped like AG-UI events, no AG-UI SDK required.
 - **Facade** — `createArbor`/`restoreArbor` wire all of the above in one call.
 
 ## Quickstart
 
 ```ts
-import { createArbor, restoreArbor, MockEmbeddingPort, MemoryDeltaStorage, sizeBasedDecision, snapshotEvent, deltaSince } from "arborkit";
+import { createArbor, restoreArbor, MockEmbeddingPort, MemoryDeltaStorage, sizeBasedDecision, snapshotEvent, deltaSince, agentToolDefs, makeToolExecutor } from "arborkit";
 
 const delta = new MemoryDeltaStorage();
 const arbor = createArbor({
@@ -53,6 +54,13 @@ const edited = await tools.patch(
   { path: "/pages/home/html" },
   { op: "edit", old: "100% do 2000 PLN", new: "150% do 3000 PLN" },
 ); // unique-or-fail: an ambiguous `old` returns INVALID_OP with the occurrence count
+
+// Or hand the whole toolset to an LLM — ready-made defs + a never-throw executor:
+const defs = agentToolDefs(); // LangChain bindTools accepts these as-is
+// Anthropic SDK: defs.map((d) => ({ name: d.name, description: d.description, input_schema: d.schema }))
+const exec = makeToolExecutor(tools); // opts: { guard, maxResultChars }
+const out = await exec("edit", { path: "/pages/home/html", old: "150% do 3000 PLN", new: "200% do 4000 PLN" });
+// out is always a JSON string of the ToolResult — errors come back serialized, never thrown
 
 // Semantic search — mutations only mark nodes stale; reindex() embeds:
 await arbor.index!.reindex();
@@ -147,6 +155,6 @@ Design spec and milestone plans live in [`docs/superpowers/`](docs/superpowers/)
 
 ## Status
 
-**v1 core complete (M1–M9), hardened (M10), packaged (M11), log compaction (M12), delta persistence (M13), hardening-2 (M14), API polish + facade (M15), published as arborkit (M16), perf + AG-UI adapter (M17), agent `edit` op (M18):** tree, mutations + reversible log, optional types, exact navigation, semantic index, storage, replay/time-travel, scoped agent toolset, end-to-end scenario, index-lifecycle hardening, an installable ESM build, an AG-UI shared-state adapter, and token-cheap agent edits.
+**v1 core complete (M1–M9), hardened (M10), packaged (M11), log compaction (M12), delta persistence (M13), hardening-2 (M14), API polish + facade (M15), published as arborkit (M16), perf + AG-UI adapter (M17), agent `edit` op (M18), agent bridge + toolset time-travel (M19):** tree, mutations + reversible log, optional types, exact navigation, semantic index, storage, replay/time-travel, scoped agent toolset, end-to-end scenario, index-lifecycle hardening, an installable ESM build, an AG-UI shared-state adapter, token-cheap agent edits, and ready-made LLM tool defs + executor.
 
-Deferred (post-v1): LangChain `tool()` / MCP-server adapters over the toolset; `getAt`/`revert` as toolset methods; DB-backed storage & vector adapters (SQLite/sqlite-vec, Postgres/pgvector); a CRDT backend.
+Deferred (post-v1): an MCP-server adapter over the toolset; DB-backed storage & vector adapters (SQLite/sqlite-vec, Postgres/pgvector); a CRDT backend.
