@@ -1,5 +1,6 @@
 import type { ArbNode, NodeId } from "./types";
 import type { ArtifactTree } from "./artifact-tree";
+import { InvalidOpError } from "./errors";
 import { buildPointer, parsePointer } from "./jsonpointer";
 
 /**
@@ -19,8 +20,13 @@ export class Addressing {
     const cur0 = this.tree.get(id);
     if (!cur0) throw new Error(`Unknown node: ${id}`);
     const segments: (string | number)[] = [];
+    const seen = new Set<NodeId>(); // insurance against corrupted parent links — a cycle would hang this sync loop
     let cur: ArbNode | undefined = cur0;
     while (cur && cur.parentId !== null) {
+      if (seen.has(cur.id)) {
+        throw new InvalidOpError(`parent chain cycle at node ${cur.id} while resolving path of ${id}`);
+      }
+      seen.add(cur.id);
       segments.unshift(cur.key as string | number);
       cur = this.tree.get(cur.parentId);
     }
