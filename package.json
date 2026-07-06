@@ -18,6 +18,14 @@
   ],
   "author": "D. A. Pominov <d.a.pominov@gmail.com>",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AnshiLeFlay/arborkit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/AnshiLeFlay/arborkit/issues"
+  },
+  "homepage": "https://github.com/AnshiLeFlay/arborkit#readme",
   "type": "module",
   "engines": {
     "node": ">=20.6"
