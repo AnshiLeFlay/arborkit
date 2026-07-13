@@ -1,7 +1,7 @@
 {
   "name": "arborkit",
   "version": "1.2.1",
-  "description": "Arbor — a shared, typed, versioned JSON artifact tree for multi-agent systems: lazy navigation, scoped agent tools, exact + semantic indexing, reversible event log with time-travel, snapshot + delta persistence, AG-UI shared-state adapter.",
+  "description": "A versioned, searchable JSON workspace for AI agents: scoped edits, semantic discovery, audit history, time-travel, and delta persistence.",
   "keywords": [
     "agents",
     "multi-agent",
@@ -166,17 +166,23 @@
   ],
   "scripts": {
     "build": "tsup",
+    "docs:api": "typedoc",
     "prepack": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "bench": "tsx bench/bench.ts",
-    "example": "tsx examples/content-site.ts"
+    "example": "npm run example:content",
+    "example:content": "tsx examples/content-site.ts",
+    "example:research": "tsx examples/research-artifact.ts",
+    "example:bridge": "tsx examples/runtime-bridge.ts",
+    "example:all": "npm run example:content && npm run example:research && npm run example:bridge"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
     "tsup": "^8.0.0",
     "tsx": "^4.19.0",
+    "typedoc": "^0.28.0",
     "typescript": "^5.6.3",
     "vitest": "^2.1.8",
     "zod": "^3.24.0"

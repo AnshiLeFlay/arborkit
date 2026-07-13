@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Repositioned ArborKit as a versioned, searchable JSON workspace embedded in
+  any agent runtime, with an explicit decision guide and architecture overview.
+- Added a production-readiness checklist and integration patterns for
+  LangChain/LangGraph, Anthropic, and Mastra.
+- Added runnable research-artifact and provider-neutral runtime-bridge examples;
+  `npm run example:all` now exercises all three documented product scenarios.
+- Added reproducible TypeDoc API generation via `npm run docs:api` and its CI gate.
+
 ## 1.2.1 — 2026-07-06
 
 Feedback round from the first production consumer adopting `arborkit/agent-tools`

@@ -1,0 +1,67 @@
+# Runtime integrations
+
+ArborKit owns artifact state and tool execution. The surrounding runtime owns
+model calls, scheduling, retries, and the conversation/tool-call loop.
+
+## LangChain and LangGraph
+
+`agentToolDefs()` returns `{ name, description, schema }` objects accepted by
+LangChain chat models through `bindTools`. A LangGraph node can keep the Arbor
+instance in application runtime context and dispatch returned calls through one
+executor.
+
+```ts
+const enabled = ["search", "get", "edit", "history"] as const;
+const definitions = agentToolDefs({ include: [...enabled] });
+const execute = makeToolExecutor(arbor.toolset({
+  owner: "graph:editor",
+  readScope: "/pages",
+  writeScope: "/pages",
+}), { include: [...enabled] });
+
+const modelWithTools = model.bindTools(definitions);
+// In the graph node: await execute(toolCall.name, toolCall.args)
+```
+
+Keep ArborKit persistence separate from the LangGraph checkpointer: the
+checkpointer resumes graph execution, while ArborKit versions the artifact being
+produced.
+
+## Anthropic SDK
+
+Rename `schema` to `input_schema`, then use the same executor.
+
+```ts
+const tools = agentToolDefs().map(({ name, description, schema }) => ({
+  name,
+  description,
+  input_schema: schema,
+}));
+```
+
+## Mastra
+
+Wrap each enabled operation in a Mastra custom tool. Let Mastra own the agent,
+workflow, approvals, and observability; let the custom tool call ArborKit's
+executor. Define the corresponding input schema in the Mastra tool so its runtime
+can validate the arguments before dispatch.
+
+```ts
+const execute = makeToolExecutor(arbor.toolset({
+  owner: "mastra:writer",
+  readScope: "/drafts",
+  writeScope: "/drafts",
+}), { include: ["get", "edit"] });
+
+// Inside a Mastra createTool({ id: "arbor_edit", ... }) executor:
+const result = JSON.parse(await execute("edit", context));
+if (!result.ok) return result; // preserve ArborKit's structured agent error
+return result.value;
+```
+
+## Provider-neutral loop
+
+The repository's runnable [runtime bridge example](../examples/runtime-bridge.ts)
+demonstrates the definitions, Anthropic mapping, allowlisted executor, and tool
+result round-trip without requiring a particular model SDK.
+

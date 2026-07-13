@@ -1,0 +1,16 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["src/index.ts"],
+  "tsconfig": "tsconfig.json",
+  "out": "docs/api",
+  "name": "ArborKit API Reference",
+  "includeVersion": true,
+  "readme": "none",
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "cleanOutputDir": true,
+  "navigationLinks": {
+    "Guides": "https://github.com/AnshiLeFlay/arborkit/tree/main/docs",
+    "GitHub": "https://github.com/AnshiLeFlay/arborkit"
+  }
+}

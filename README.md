@@ -1,15 +1,44 @@
-# Arbor (`arborkit`)
+# ArborKit (`arborkit`)
 
-A general-purpose TypeScript core for multi-agent systems built around one shared
-**artifact tree**: agents navigate and edit a JSON tree through scoped tools, with a
-per-node exact + semantic index, a reversible event log, snapshots + delta persistence,
-and time-travel. **Zero runtime dependencies.**
+A **versioned, searchable JSON workspace for AI agents**. ArborKit gives agents
+scoped tools to navigate and edit one shared artifact, while the application gets
+stable node identity, exact + semantic discovery, an append-only audit log,
+time-travel, and snapshot + delta persistence. **Zero runtime dependencies.**
+
+ArborKit is an embedded artifact-state layer, not an agent runtime. Use it inside
+LangGraph, Mastra, an SDK tool loop, or your own orchestrator.
 
 ```bash
 npm install arborkit
 ```
 
 ESM-only, Node ≥ 20.6.
+
+## Is ArborKit a fit?
+
+Use it when several agents incrementally build a structured artifact — a site,
+research dossier, plan, report, catalog, or configuration — and you need narrow
+write scopes, cheap exact edits, audit history, and reversible changes.
+
+Choose another primary state layer when you need offline/realtime multi-writer
+CRDT convergence, a shared database, or a durable workflow scheduler. ArborKit v1
+is deliberately single-process and single-writer.
+
+- [Start in 15 minutes](docs/getting-started.md)
+- [Decision guide: ArborKit vs LangGraph, Mastra, Automerge, Yjs, and Liveblocks](docs/decision-guide.md)
+- [Architecture and invariants](docs/architecture.md)
+- [Production checklist](docs/production-checklist.md)
+- [Runtime integration patterns](docs/integrations.md)
+
+```text
+LLM SDK / agent runtime
+          │ tool calls
+          ▼
+ scoped ArborKit toolset ──► artifact tree ──► snapshot / AG-UI state
+          │                       │
+          ├── exact + semantic    └──────────► append-only event log
+          └── edit + time travel
+```
 
 ## The stack
 
@@ -131,10 +160,13 @@ plus an NDJSON journal; a torn journal tail is isolated on restore.
   *container's* version, and every sibling insert bumps the container. Use it to
   guard "the container hasn't changed", not "my item is new".
 
-## Run the example
+## Run the examples
 
 ```bash
-npm run example   # narrated end-to-end content-site scenario (examples/content-site.ts)
+npm run example:content   # scoped agents build and edit a content site
+npm run example:research  # researchers and a synthesizer share one artifact
+npm run example:bridge    # provider-neutral LLM tool-call round-trip
+npm run example:all       # run all three
 ```
 
 ## Develop
@@ -144,6 +176,7 @@ npm test          # vitest
 npm run typecheck # tsc --noEmit
 npm run build     # tsup → dist/ (ESM + type declarations)
 npm run bench     # micro-benchmarks (replay, navigation, glob find, vector search)
+npm run docs:api  # TypeDoc → docs/api/index.html
 ```
 
 Subpath imports work too: `import { Replay } from "arborkit/replay";` — every
@@ -151,7 +184,16 @@ module in `src/` maps onto `arborkit/<module>`.
 
 ## Docs
 
-Design spec and milestone plans live in [`docs/superpowers/`](docs/superpowers/).
+- [Getting started](docs/getting-started.md)
+- [Decision guide](docs/decision-guide.md)
+- [Architecture](docs/architecture.md)
+- [Production checklist](docs/production-checklist.md)
+- [Runtime integrations](docs/integrations.md)
+- Full generated API reference: run `npm run docs:api`, then open
+  `docs/api/index.html`.
+
+Historical design specs and implementation plans live in
+[`docs/superpowers/`](docs/superpowers/).
 
 ## Status
 
