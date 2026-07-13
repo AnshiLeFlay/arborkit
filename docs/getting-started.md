@@ -46,9 +46,9 @@ scope violation or stale version do not escape the tool boundary as exceptions.
 ```ts
 import { agentToolDefs, makeToolExecutor } from "arborkit";
 
-const definitions = agentToolDefs({ include: ["get", "edit", "history"] });
+const definitions = agentToolDefs({ profile: "editor" });
 const execute = makeToolExecutor(writer, {
-  include: ["get", "edit", "history"],
+  profile: "editor",
 });
 
 // Bind `definitions` to the model, then dispatch each returned tool call:
@@ -59,15 +59,15 @@ const resultJson = await execute("edit", {
 });
 ```
 
-Pass the same `include` list to the definitions and executor. This keeps the
-advertised and executable capabilities identical.
+Pass the same profile and optional `include` list to the definitions and
+executor. This keeps advertised and executable capabilities identical.
 
 ## Choose the next guide
 
 - [Decision guide](decision-guide.md) — fit, tradeoffs, and alternatives.
 - [Architecture](architecture.md) — components and invariants.
+- [Agent bridge](agent-bridge.md) — profiles, atomic writes, guards, and approvals.
 - [Runtime integrations](integrations.md) — LangChain/LangGraph, Anthropic, and Mastra patterns.
 - [Production checklist](production-checklist.md) — current operational boundaries.
 - Run all repository examples with `npm run example:all`.
 - Generate the complete API site with `npm run docs:api` and open `docs/api/index.html`.
-

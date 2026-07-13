@@ -22,8 +22,13 @@ const mutator = new Mutator(tree, addressing, log, { clock: deps.clock });
 const tools = makeToolset({ tree, addressing, log, mutator }, { owner: "smoke", writeScope: "/pages" });
 const ins = await tools.patch({ path: "/pages" }, { op: "insert", key: "home", value: { title: "Home" } });
 if (!ins.ok) throw new Error("insert failed: " + JSON.stringify(ins));
+const batch = await tools.batchPatch([
+  { ref: { path: "/pages/home/title" }, op: { op: "edit", old: "Home", new: "Reviewed Home" } },
+  { ref: { path: "/pages/home" }, op: { op: "insert", key: "status", value: "ready" } },
+]);
+if (!batch.ok || batch.value.length !== 2) throw new Error("batch failed: " + JSON.stringify(batch));
 const got = await tools.get({ path: "/pages/home" });
-if (!got.ok || got.value.content.title !== "Home") throw new Error("get failed");
+if (!got.ok || got.value.content.title !== "Reviewed Home" || got.value.content.status !== "ready") throw new Error("get failed");
 const refused = await tools.patch({ path: "/secret" }, { op: "set", value: 1 });
 if (refused.ok) throw new Error("scope violation not refused");
 // Cross-entry class identity: with code splitting OFF, subpath entries bundle their

@@ -11,13 +11,12 @@ instance in application runtime context and dispatch returned calls through one
 executor.
 
 ```ts
-const enabled = ["search", "get", "edit", "history"] as const;
-const definitions = agentToolDefs({ include: [...enabled] });
+const definitions = agentToolDefs({ profile: "editor" });
 const execute = makeToolExecutor(arbor.toolset({
   owner: "graph:editor",
   readScope: "/pages",
   writeScope: "/pages",
-}), { include: [...enabled] });
+}), { profile: "editor" });
 
 const modelWithTools = model.bindTools(definitions);
 // In the graph node: await execute(toolCall.name, toolCall.args)
@@ -64,4 +63,3 @@ return result.value;
 The repository's runnable [runtime bridge example](../examples/runtime-bridge.ts)
 demonstrates the definitions, Anthropic mapping, allowlisted executor, and tool
 result round-trip without requiring a particular model SDK.
-

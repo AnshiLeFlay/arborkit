@@ -1,6 +1,23 @@
 # Changelog
 
-## Unreleased
+## 1.3.0 — 2026-07-14
+
+- **Atomic toolset batches:** `Toolset.batchPatch(steps)` applies any combination
+  of set/insert/remove/move/edit in one transaction and returns ordered
+  `PatchResult[]`; any scope, validation, version, or operation failure restores
+  the tree, versions, event log, and semantic queues.
+- **Complete agent mutation surface:** new `insert`, `remove`, `move`, and
+  `batch_patch` tools; `edit`, `set_value`, `insert`, `remove`, and `move` expose
+  `ifVersion` so model-driven writes can use compare-and-set.
+- **Safer capability presets:** `reader`, `editor`, and `admin` profiles for both
+  definitions and executor. `include` intersects a profile and can never widen it.
+  Calling both APIs with no options preserves the v1.2 nine-tool surface; new
+  destructive tools require an explicit profile/include opt-in.
+- Search tools now expose `under`, `type`, `tag`, and `freshness`; every tool
+  definition includes an output JSON Schema for its complete `ToolResult`.
+- Guards may be async and run per contained batch operation. A new async
+  `approval` callback returns `APPROVAL_DENIED` before dispatch; all batch guards
+  and approvals finish before the atomic write starts.
 
 - Repositioned ArborKit as a versioned, searchable JSON workspace embedded in
   any agent runtime, with an explicit decision guide and architecture overview.

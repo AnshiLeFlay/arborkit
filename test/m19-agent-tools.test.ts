@@ -43,7 +43,7 @@ function parse(s: string): ToolResult<any> {
 }
 
 describe("M19 agent-tools — tool defs", () => {
-  it("agentToolDefs() returns the 9 defs with valid plain-object JSON Schemas", () => {
+  it("agentToolDefs() returns all defs with valid plain-object JSON Schemas", () => {
     const defs = agentToolDefs();
     expect(defs.map((d) => d.name)).toEqual(ALL_NAMES);
     for (const d of defs) {
@@ -348,7 +348,7 @@ describe("M19 agent-tools — review follow-ups", () => {
     if (!hist.ok) expect(hist.error.code).toBe("UNKNOWN_TOOL");
   });
 
-  it("executor without include still dispatches all nine (back-compat)", async () => {
+  it("executor without include preserves the legacy nine-tool surface", async () => {
     const s = setup();
     const exec = makeToolExecutor(s.ts);
     for (const name of ALL_NAMES) {

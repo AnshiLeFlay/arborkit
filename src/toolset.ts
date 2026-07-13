@@ -40,6 +40,12 @@ export type PatchOp =
   | { op: "move"; to: Ref; key: string | number; ifVersion?: number }
   | { op: "edit"; old: string; new: string; replaceAll?: boolean; ifVersion?: number };
 
+/** One operation in an atomic {@link Toolset.batchPatch} call. */
+export interface PatchStep {
+  ref: Ref;
+  op: PatchOp;
+}
+
 export interface ToolsetDeps {
   tree: ArtifactTree;
   addressing: Addressing;
@@ -69,6 +75,9 @@ export interface Toolset {
   find(selector: FindSelector, opts?: FindOpts): Promise<ToolResult<FindResult>>;
   search(query: string, opts?: SearchOpts): Promise<ToolResult<SearchResult>>;
   patch(ref: Ref, op: PatchOp): Promise<ToolResult<PatchResult>>;
+  /** Apply every step in one transaction. Any failure rolls back the tree, log,
+   *  versions, and semantic-index queues; results preserve input order. */
+  batchPatch(steps: readonly PatchStep[]): Promise<ToolResult<PatchResult[]>>;
   history(ref?: Ref, opts?: { limit?: number }): Promise<ToolResult<MutationEvent[]>>;
   /** Value of `ref` as of `version` (event-log seq). Read-only time travel; readScope applies.
    *  Path-addressed at the node's CURRENT path — for an `{id}` ref of a since-moved node this
@@ -107,6 +116,80 @@ export function makeToolset(deps: ToolsetDeps, binding: ToolsetBinding = {}): To
     const node = "id" in r ? addressing.byId(r.id) : addressing.byPath(r.path);
     if (!node) throw new NodeNotFoundError(r);
     return node;
+  };
+
+  /** Synchronous patch body shared by patch() and atomic batchPatch(). */
+  const applyPatch = (ref: Ref, op: PatchOp): PatchResult => {
+    const common = { owner: binding.owner, writeScope: binding.writeScope, ifVersion: op.ifVersion };
+    switch (op.op) {
+      case "set": {
+        deps.mutator.set(ref, op.value, common);
+        const node = resolve(ref);
+        return { id: node.id, path: addressing.pathOf(node.id), version: node.meta.version };
+      }
+      case "insert": {
+        const id = deps.mutator.insert(ref, op.key, op.value, common);
+        const node = tree.get(id)!;
+        return { id, path: addressing.pathOf(id), version: node.meta.version };
+      }
+      case "remove": {
+        const node = resolve(ref);
+        const removed = { id: node.id, path: addressing.pathOf(node.id) };
+        const parentId = node.parentId;
+        deps.mutator.remove(ref, common);
+        const parent = parentId !== null ? tree.get(parentId) : undefined;
+        return { id: removed.id, path: removed.path, version: parent?.meta.version ?? 0 };
+      }
+      case "move": {
+        const node = resolve(ref);
+        deps.mutator.move(ref, op.to, op.key, common);
+        return { id: node.id, path: addressing.pathOf(node.id), version: node.meta.version };
+      }
+      case "edit": {
+        const node = resolve(ref);
+        const path = addressing.pathOf(node.id);
+        // Scope, then version, then content — the Mutator's own ordering. The
+        // content checks below read the live value, so they must not run first:
+        // "not found" vs SCOPE_VIOLATION would be a binary-search oracle on
+        // out-of-scope content, and INVALID_OP on a stale read sends the agent
+        // chasing a "wrong quote" instead of re-getting.
+        if (binding.writeScope !== undefined && !isWithin(path, binding.writeScope)) {
+          throw new ScopeViolationError(path, binding.writeScope);
+        }
+        if (op.ifVersion !== undefined && node.meta.version !== op.ifVersion) {
+          throw new StaleVersionError(node.id, op.ifVersion, node.meta.version);
+        }
+        const value = tree.toJson(node.id);
+        if (typeof value !== "string") {
+          const kind =
+            value === null
+              ? "null"
+              : Array.isArray(value)
+                ? "an array"
+                : typeof value === "object"
+                  ? "an object"
+                  : `a ${typeof value}`;
+          throw new InvalidOpError(
+            `edit targets string values; ${path} is ${kind} — target a string field inside it`,
+          );
+        }
+        if (op.old === "") throw new InvalidOpError("edit: old must be non-empty");
+        if (op.old === op.new) throw new InvalidOpError("edit: old and new are identical");
+        const count = value.split(op.old).length - 1;
+        if (count === 0) throw new InvalidOpError(`edit: old string not found in ${path}`);
+        if (count > 1 && !op.replaceAll) {
+          throw new InvalidOpError(
+            `edit: old string occurs ${count} times in ${path} — quote a larger unique fragment or set replaceAll`,
+          );
+        }
+        // split/join instead of String.replace: replace() interprets `$&` etc. in
+        // the replacement string, which would corrupt an exact-substring edit.
+        const next = value.split(op.old).join(op.new);
+        deps.mutator.set(ref, next, common);
+        const after = resolve(ref);
+        return { id: after.id, path: addressing.pathOf(after.id), version: after.meta.version };
+      }
+    }
   };
 
   return {
@@ -150,79 +233,16 @@ export function makeToolset(deps: ToolsetDeps, binding: ToolsetBinding = {}): To
         return deps.index.search(query, { ...opts, under });
       }),
 
-    patch: (ref, op) =>
-      run<PatchResult>(() => {
-        const common = { owner: binding.owner, writeScope: binding.writeScope, ifVersion: op.ifVersion };
-        switch (op.op) {
-          case "set": {
-            deps.mutator.set(ref, op.value, common);
-            const node = resolve(ref);
-            return { id: node.id, path: addressing.pathOf(node.id), version: node.meta.version };
-          }
-          case "insert": {
-            const id = deps.mutator.insert(ref, op.key, op.value, common);
-            const node = tree.get(id)!;
-            return { id, path: addressing.pathOf(id), version: node.meta.version };
-          }
-          case "remove": {
-            const node = resolve(ref);
-            const removed = { id: node.id, path: addressing.pathOf(node.id) };
-            const parentId = node.parentId;
-            deps.mutator.remove(ref, common);
-            const parent = parentId !== null ? tree.get(parentId) : undefined;
-            return { id: removed.id, path: removed.path, version: parent?.meta.version ?? 0 };
-          }
-          case "move": {
-            const node = resolve(ref);
-            deps.mutator.move(ref, op.to, op.key, common);
-            return { id: node.id, path: addressing.pathOf(node.id), version: node.meta.version };
-          }
-          case "edit": {
-            const node = resolve(ref);
-            const path = addressing.pathOf(node.id);
-            // Scope, then version, then content — the Mutator's own ordering. The
-            // content checks below read the live value, so they must not run first:
-            // "not found" vs SCOPE_VIOLATION would be a binary-search oracle on
-            // out-of-scope content, and INVALID_OP on a stale read sends the agent
-            // chasing a "wrong quote" instead of re-getting.
-            if (binding.writeScope !== undefined && !isWithin(path, binding.writeScope)) {
-              throw new ScopeViolationError(path, binding.writeScope);
-            }
-            if (op.ifVersion !== undefined && node.meta.version !== op.ifVersion) {
-              throw new StaleVersionError(node.id, op.ifVersion, node.meta.version);
-            }
-            const value = tree.toJson(node.id);
-            if (typeof value !== "string") {
-              const kind =
-                value === null
-                  ? "null"
-                  : Array.isArray(value)
-                    ? "an array"
-                    : typeof value === "object"
-                      ? "an object"
-                      : `a ${typeof value}`;
-              throw new InvalidOpError(
-                `edit targets string values; ${path} is ${kind} — target a string field inside it`,
-              );
-            }
-            if (op.old === "") throw new InvalidOpError("edit: old must be non-empty");
-            if (op.old === op.new) throw new InvalidOpError("edit: old and new are identical");
-            const count = value.split(op.old).length - 1;
-            if (count === 0) throw new InvalidOpError(`edit: old string not found in ${path}`);
-            if (count > 1 && !op.replaceAll) {
-              throw new InvalidOpError(
-                `edit: old string occurs ${count} times in ${path} — quote a larger unique fragment or set replaceAll`,
-              );
-            }
-            // split/join instead of String.replace: replace() interprets `$&` etc. in the
-            // replacement string, which would corrupt an exact-substring edit. When count
-            // is 1 the two are equivalent anyway.
-            const next = value.split(op.old).join(op.new);
-            deps.mutator.set(ref, next, common);
-            const after = resolve(ref);
-            return { id: after.id, path: addressing.pathOf(after.id), version: after.meta.version };
-          }
-        }
+    patch: (ref, op) => run(() => applyPatch(ref, op)),
+
+    batchPatch: (steps) =>
+      run(() => {
+        if (steps.length === 0) throw new InvalidOpError("batchPatch requires at least one operation");
+        const results: PatchResult[] = [];
+        deps.mutator.transaction(() => {
+          for (const step of steps) results.push(applyPatch(step.ref, step.op));
+        });
+        return results;
       }),
 
     history: (ref, opts = {}) =>

@@ -27,6 +27,7 @@ is deliberately single-process and single-writer.
 - [Start in 15 minutes](docs/getting-started.md)
 - [Decision guide: ArborKit vs LangGraph, Mastra, Automerge, Yjs, and Liveblocks](docs/decision-guide.md)
 - [Architecture and invariants](docs/architecture.md)
+- [Agent bridge: tools, profiles, concurrency, and approvals](docs/agent-bridge.md)
 - [Production checklist](docs/production-checklist.md)
 - [Runtime integration patterns](docs/integrations.md)
 
@@ -50,8 +51,8 @@ LLM SDK / agent runtime
 - **Semantic index** — per-node embeddings via pluggable `EmbeddingPort`/`VectorIndexPort` (async — DB-backed adapters welcome); `search` by meaning returns `{results, staleCount}`, off the mutation path (mutations only mark stale; an async reindexer embeds).
 - **Storage** — serialize the whole artifact (tree + log + vectors) to memory or a JSON file; or persist incrementally (checkpoint + appendable NDJSON journal); restore intact either way.
 - **Replay** — reconstruct any past version, `diff` two versions, `revert` a node (append-only, path-addressed).
-- **Toolset** — hand an agent a scoped, async, structured-result bundle: `describe`/`get`/`find`/`search`/`patch`/`history`/`getAt`/`revert` (`patch` ops: `set`/`insert`/`remove`/`move`/`edit`; `getAt`/`revert` = scoped time-travel read + append-only undo). Writes are confined to `writeScope`, reads to `readScope`; errors are returned, never thrown across the boundary. `patch` returns `{id, path, version}` of the touched node.
-- **Agent bridge** — `agentToolDefs()`: 9 ready-made LLM tool definitions as plain JSON Schema literals (LangChain `bindTools` takes them as-is; Anthropic SDK via a one-line `input_schema` mapping) + `makeToolExecutor(toolset)`: a never-throw `(toolName, input) → JSON string` executor for the tool-call loop, with input validation, a result-size cap, and a `guard` hook for domain rules.
+- **Toolset** — hand an agent a scoped, async, structured-result bundle: `describe`/`get`/`find`/`search`/`patch`/`batchPatch`/`history`/`getAt`/`revert`. `batchPatch` applies `set`/`insert`/`remove`/`move`/`edit` atomically and rolls the whole batch back on failure. Writes are confined to `writeScope`, reads to `readScope`; errors are returned, never thrown across the boundary.
+- **Agent bridge** — 13 provider-neutral LLM tools with input + output JSON Schemas, `reader`/`editor`/`admin` profiles, optimistic `ifVersion`, atomic `batch_patch`, full semantic-search filters, operation-level guards, async approvals, and a never-throw executor. LangChain `bindTools` accepts the definitions as-is; Anthropic needs a one-line `input_schema` mapping.
 - **AG-UI adapter** — expose the tree + log as [AG-UI](https://docs.ag-ui.com) shared-state events: `snapshotEvent` (STATE_SNAPSHOT) + `deltaSince` (STATE_DELTA with RFC 6902 JSON Patch ops). Zero-dep — plain objects shaped like AG-UI events, no AG-UI SDK required.
 - **Facade** — `createArbor`/`restoreArbor` wire all of the above in one call.
 
@@ -85,10 +86,13 @@ const edited = await tools.patch(
 ); // unique-or-fail: an ambiguous `old` returns INVALID_OP with the occurrence count
 
 // Or hand the whole toolset to an LLM — ready-made defs + a never-throw executor:
-const defs = agentToolDefs(); // LangChain bindTools accepts these as-is
+const defs = agentToolDefs({ profile: "editor" }); // LangChain bindTools accepts these as-is
 // Anthropic SDK: defs.map((d) => ({ name: d.name, description: d.description, input_schema: d.schema }))
-const exec = makeToolExecutor(tools); // opts: { guard, maxResultChars }
-const out = await exec("edit", { path: "/pages/home/html", old: "150% do 3000 PLN", new: "200% do 4000 PLN" });
+const exec = makeToolExecutor(tools, { profile: "editor" }); // opts: { guard, approval, maxResultChars }
+const out = await exec("edit", {
+  path: "/pages/home/html", old: "150% do 3000 PLN", new: "200% do 4000 PLN",
+  ifVersion: edited.ok ? edited.value.version : undefined,
+});
 // out is always a JSON string of the ToolResult — errors come back serialized, never thrown
 
 // Semantic search — mutations only mark nodes stale; reindex() embeds:
@@ -187,6 +191,7 @@ module in `src/` maps onto `arborkit/<module>`.
 - [Getting started](docs/getting-started.md)
 - [Decision guide](docs/decision-guide.md)
 - [Architecture](docs/architecture.md)
+- [Agent bridge](docs/agent-bridge.md)
 - [Production checklist](docs/production-checklist.md)
 - [Runtime integrations](docs/integrations.md)
 - Full generated API reference: run `npm run docs:api`, then open
@@ -197,6 +202,6 @@ Historical design specs and implementation plans live in
 
 ## Status
 
-**v1 core complete (M1–M9), hardened (M10), packaged (M11), log compaction (M12), delta persistence (M13), hardening-2 (M14), API polish + facade (M15), published as arborkit (M16), perf + AG-UI adapter (M17), agent `edit` op (M18), agent bridge + toolset time-travel (M19):** tree, mutations + reversible log, optional types, exact navigation, semantic index, storage, replay/time-travel, scoped agent toolset, end-to-end scenario, index-lifecycle hardening, an installable ESM build, an AG-UI shared-state adapter, token-cheap agent edits, and ready-made LLM tool defs + executor.
+**v1.3 core complete through M20:** the original tree/mutation/index/storage/replay/toolset stack (M1–M19), plus agent-bridge parity: all core mutations, optimistic versions, atomic batches, profiles, output schemas, filtered semantic search, operation guards, and approvals.
 
 Deferred (post-v1): an MCP-server adapter over the toolset; DB-backed storage & vector adapters (SQLite/sqlite-vec, Postgres/pgvector); a CRDT backend.

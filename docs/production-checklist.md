@@ -9,16 +9,18 @@ putting an artifact on a production path.
 - [ ] No two processes point `FileStorage` or `FileDeltaStorage` at the same files.
 - [ ] The application serializes concurrent write requests.
 - [ ] Every agent/toolset has a stable `owner` for audit events.
-- [ ] Writes which depend on a prior read use `ifVersion` through the core toolset.
+- [ ] Writes which depend on a prior read pass the returned `meta.version` as `ifVersion`.
+- [ ] Agent profiles expose only the capabilities required by the task.
 
-The ready-made nine-tool LLM bridge does not yet expose every core mutation or
-`ifVersion`. Add a guarded application tool when a model-driven write requires
-compare-and-set behavior.
+The ready-made bridge exposes every core mutation. The conservative `editor`
+profile omits `remove`, `revert`, and unrestricted `batch_patch`; use `admin` or a
+custom `include` set only when those capabilities are intentional.
 
 ## Scopes and trust
 
 - [ ] `readScope` and `writeScope` are as narrow as the agent's task permits.
 - [ ] Dangerous writes use a domain `guard` or an application approval step.
+- [ ] Batch guards/approvals are tested to reject before the first mutation.
 - [ ] Mutually untrusted code runs in separate processes or sandboxes.
 - [ ] Tool results and errors are treated as untrusted model-visible data.
 
@@ -57,4 +59,3 @@ npm run build
 npm run example:all
 npm run docs:api
 ```
-
