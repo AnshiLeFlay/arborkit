@@ -6,7 +6,16 @@ export function canonicalize(value: Json): string {
     if (Array.isArray(current)) return current.map(normalize);
     if (current !== null && typeof current === "object") {
       const result: Record<string, Json> = {};
-      for (const key of Object.keys(current).sort()) result[key] = normalize(current[key]);
+      for (const key of Object.keys(current).sort()) {
+        // defineProperty: assigning a "__proto__" key would hit the prototype
+        // setter and silently drop it from the canonical form.
+        Object.defineProperty(result, key, {
+          value: normalize(current[key]),
+          enumerable: true,
+          writable: true,
+          configurable: true,
+        });
+      }
       return result;
     }
     return current;

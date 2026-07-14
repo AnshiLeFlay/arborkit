@@ -15,6 +15,14 @@ describe("M21 structural analytics", () => {
     expect(structuralHash({ items: [1, 2] })).not.toBe(structuralHash({ items: [1, 2, 3] }));
   });
 
+  it('treats "__proto__" as an ordinary data key', () => {
+    // JSON.parse: an object literal with a "__proto__" key would set the
+    // prototype instead of creating an own property.
+    const withProto = JSON.parse('{"a":{"__proto__":{"x":1}}}');
+    expect(canonicalize(withProto)).toBe('{"a":{"__proto__":{"x":1}}}');
+    expect(structuralHash(withProto)).not.toBe(structuralHash({ a: {} }));
+  });
+
   it("compares shapes while ignoring leaf values", () => {
     const four = { nav: [{ t: "A" }, { t: "B" }, { t: "C" }, { t: "D" }] };
     const renamed = { nav: [{ t: "W" }, { t: "X" }, { t: "Y" }, { t: "Z" }] };

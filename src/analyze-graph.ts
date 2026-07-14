@@ -154,7 +154,15 @@ export function topoSort(graph: Digraph): string[] | null {
 /** In/out degree per directed-graph node. */
 export function degrees(graph: Digraph): Record<string, { in: number; out: number }> {
   const result: Record<string, { in: number; out: number }> = {};
-  for (const node of graphNodes(graph)) result[node] = { in: 0, out: 0 };
+  for (const node of graphNodes(graph)) {
+    // defineProperty: a "__proto__" node name must become an own property.
+    Object.defineProperty(result, node, {
+      value: { in: 0, out: 0 },
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+  }
   for (const [node, targets] of graph) {
     result[node].out += targets.length;
     for (const target of targets) result[target].in++;

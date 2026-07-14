@@ -69,7 +69,12 @@ const str = Object.freeze({ type: "string" } as const);
 const positiveInt = Object.freeze({ type: "integer", minimum: 1 } as const);
 const integer = Object.freeze({ type: "integer" } as const);
 const number = Object.freeze({ type: "number" } as const);
-const freshness = Object.freeze({ type: "string", enum: ["best-effort", "wait"] } as const);
+// Deep-frozen: the enum array is shared by every def and every call (see the
+// extend-not-mutate note in agent-tools).
+const freshness = Object.freeze({
+  type: "string",
+  enum: Object.freeze(["best-effort", "wait"]),
+} as const);
 
 function objectSchema(
   properties: Record<string, unknown>,

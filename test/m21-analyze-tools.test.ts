@@ -41,6 +41,14 @@ describe("M21 analysis tool definitions", () => {
       .toEqual(["cluster", "outliers"]);
     expect(analyzeToolDefs({ profile: "admin", include: [] })).toEqual([]);
   });
+
+  it("deeply freezes shared schema leaves against contamination", () => {
+    const reference = structuredClone(analyzeToolDefs({ profile: "reader" }));
+    const defs = analyzeToolDefs({ profile: "reader" });
+    const freshness = (defs.find((d) => d.name === "cluster")!.schema["properties"] as any).freshness;
+    expect(() => freshness.enum.push("stale-ok")).toThrow(TypeError);
+    expect(analyzeToolDefs({ profile: "reader" })).toEqual(reference);
+  });
 });
 
 describe("M21 analysis executor", () => {

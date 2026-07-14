@@ -77,4 +77,11 @@ describe("M21 directed graph algorithms", () => {
     expect([...reachable(graph, ["home"])]).toEqual(["home", "a"]);
     expect(orphans(graph, ["home"], ["orphan", "a", "home"])).toEqual(["orphan"]);
   });
+
+  it('keeps a node named "__proto__" in the degree report', () => {
+    const result = degrees(new Map([["a", ["__proto__"]], ["__proto__", []]]));
+    expect(Object.hasOwn(result, "__proto__")).toBe(true);
+    expect(result["__proto__"]).toEqual({ in: 1, out: 0 });
+    expect(result.a).toEqual({ in: 0, out: 1 });
+  });
 });

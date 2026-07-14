@@ -335,6 +335,9 @@ export function agentToolDefs(opts: AgentToolSurfaceOptions = {}): AgentToolDef[
 }
 
 class InputError extends Error {}
+// A batch operation outside the executor's allowed surface. Raised while
+// planning — before operation parsing and before any guard/approval runs.
+class SurfaceError extends Error {}
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -443,7 +446,11 @@ interface ExecutionPlan {
   checks: OperationCheck[];
 }
 
-function plan(name: AgentToolName, input: Record<string, unknown>): ExecutionPlan {
+function plan(
+  name: AgentToolName,
+  input: Record<string, unknown>,
+  allowed: readonly AgentToolName[],
+): ExecutionPlan {
   const single = (dispatch: Dispatch): ExecutionPlan => ({ dispatch, checks: [{ name, input }] });
   switch (name) {
     case "search": {
@@ -494,6 +501,11 @@ function plan(name: AgentToolName, input: Record<string, unknown>): ExecutionPla
           throw new InputError(`operations[${index}].op must be one of: ${mutationNames.join(", ")}`);
         }
         const operationName = op as MutationToolName;
+        if (!allowed.includes(operationName)) {
+          throw new SurfaceError(
+            `batch operation "${operationName}" is not enabled for this executor; available: ${allowed.join(", ")}`,
+          );
+        }
         try {
           steps.push(mutationStep(operationName, raw));
         } catch (error) {
@@ -569,14 +581,8 @@ export function makeToolExecutor(
 
     let result: ToolResult<unknown>;
     try {
-      const execution = plan(name, input);
+      const execution = plan(name, input, allowed);
       for (const operation of execution.checks) {
-        if (!(allowed as readonly string[]).includes(operation.name)) {
-          return errorResult(
-            "UNKNOWN_TOOL",
-            `batch operation "${operation.name}" is not enabled for this executor; available: ${allowed.join(", ")}`,
-          );
-        }
         const refusal = opts.guard === undefined ? null : await opts.guard(operation.name, operation.input);
         if (refusal != null) {
           return JSON.stringify({ ok: false, error: normalizeRefusal(refusal) });
@@ -587,6 +593,7 @@ export function makeToolExecutor(
       }
       result = await execution.dispatch(toolset);
     } catch (error) {
+      if (error instanceof SurfaceError) return errorResult("UNKNOWN_TOOL", error.message);
       if (error instanceof InputError) return errorResult("INVALID_INPUT", error.message);
       return errorResult("EXECUTOR_ERROR", error instanceof Error ? error.message : String(error));
     }

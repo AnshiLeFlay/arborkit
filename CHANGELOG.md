@@ -25,9 +25,10 @@
   `include`-narrowed executor refuses e.g. a wrapped `remove` with
   `UNKNOWN_TOOL` before guards, approvals, and dispatch. To use an operation
   inside batches, list its tool in the surface alongside `batch_patch`.
-- Shared schema leaves introduced in 1.3.0 (`key.oneOf`, `freshness.enum`,
-  patch-result internals) are frozen deeply; mutating them previously
-  contaminated every future `agentToolDefs()` call.
+- Shared schema leaves in both tool modules (`key.oneOf`, `freshness.enum` in
+  agent-tools AND analyze-tools, patch-result internals) are frozen deeply;
+  mutating them previously contaminated every future `agentToolDefs()` /
+  `analyzeToolDefs()` call.
 - The `maxResultChars` cap applies to reads only. A large committed write
   (typically a successful batch) was returned as `TOO_LARGE`, inviting the
   model to retry and double-apply.
@@ -38,7 +39,9 @@
 - A node keyed `"__proto__"` (reachable through the `insert` tool) existed in
   the tree but silently vanished from `toJson`, `get`, and replay
   reconstruction — object assembly hit the prototype setter. Assembly now
-  defines own properties and JSON Pointer navigation uses own-property reads.
+  defines own properties and JSON Pointer navigation uses own-property reads;
+  the same fix covers `canonicalize`/`structuralHash` and `degrees` in the
+  analysis layer.
 - Analysis-layer determinism across machines: every ordering uses code-unit
   comparison instead of locale-dependent `localeCompare`; `knnGraph` validates
   vector dimensions and drops non-finite edge weights.

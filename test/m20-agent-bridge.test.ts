@@ -233,9 +233,20 @@ describe("M20 surface narrowing is batch-proof", () => {
     expect((tree.toJson() as any).pages.home.body).toBe("Hi");
   });
 
-  it("refuses a mixed batch atomically when one operation is outside the surface", async () => {
+  it("refuses a mixed batch atomically, before any guard or approval runs", async () => {
     const { tree, log, tools } = setup();
-    const execute = makeToolExecutor(tools, { include: ["set_value", "batch_patch"] });
+    const hookCalls: string[] = [];
+    const execute = makeToolExecutor(tools, {
+      include: ["set_value", "batch_patch"],
+      guard: (name) => {
+        hookCalls.push(`guard:${name}`);
+        return null;
+      },
+      approval: (name) => {
+        hookCalls.push(`approval:${name}`);
+        return true;
+      },
+    });
     const before = structuredClone(tree.toJson());
     const result = parse(
       await execute("batch_patch", {
@@ -247,8 +258,17 @@ describe("M20 surface narrowing is batch-proof", () => {
     );
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe("UNKNOWN_TOOL");
+    expect(hookCalls).toEqual([]);
     expect(tree.toJson()).toEqual(before);
     expect(log.length()).toBe(0);
+  });
+
+  it("reports UNKNOWN_TOOL for a disallowed operation even when its input is malformed", async () => {
+    const { tools } = setup();
+    const execute = makeToolExecutor(tools, { include: ["set_value", "batch_patch"] });
+    const result = parse(await execute("batch_patch", { operations: [{ op: "remove" }] }));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("UNKNOWN_TOOL");
   });
 });
 
