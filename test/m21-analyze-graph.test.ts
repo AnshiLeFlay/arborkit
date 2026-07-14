@@ -31,6 +31,38 @@ describe("M21 similarity graphs", () => {
   });
 });
 
+describe("M21 graph determinism hardening", () => {
+  it("orders ids by code units, independent of the process locale", () => {
+    const graph = knnGraph([
+      { id: "a", vector: [1, 0] },
+      { id: "B", vector: [1, 0.01] },
+    ], { k: 1 });
+    // "B" (0x42) sorts before "a" (0x61); locale-aware collation flips this
+    expect(graph.nodes).toEqual(["B", "a"]);
+    expect(graph.edges.map((edge) => [edge.a, edge.b])).toEqual([["B", "a"]]);
+  });
+
+  it("rejects mixed vector dimensions", () => {
+    expect(() =>
+      knnGraph([
+        { id: "a", vector: [1, 0] },
+        { id: "b", vector: [1, 0, 0] },
+      ], { k: 1 }),
+    ).toThrow("same dimension");
+  });
+
+  it("drops NaN-weight edges instead of letting them into the graph", () => {
+    const graph = knnGraph([
+      { id: "a", vector: [1, 0] },
+      { id: "b", vector: [0.9, 0.1] },
+      { id: "broken", vector: [Number.NaN, 0] },
+    ], { k: 2 });
+    expect(graph.nodes).toEqual(["a", "b", "broken"]);
+    expect(graph.edges.map((edge) => [edge.a, edge.b])).toEqual([["a", "b"]]);
+    expect(graph.edges.every((edge) => Number.isFinite(edge.weight))).toBe(true);
+  });
+});
+
 describe("M21 directed graph algorithms", () => {
   it("finds cycles, degrees, topological order, reachability, and orphans", () => {
     expect(findCycles(new Map([["a", ["b"]], ["b", ["c"]], ["c", ["a"]]]))).toEqual([["a", "b", "c"]]);

@@ -14,6 +14,12 @@ import { connectedComponents, knnGraph } from "./analyze-graph";
 import { structuralHash } from "./analyze-struct";
 import { isWithin } from "./jsonpointer";
 
+// Code-unit string order: localeCompare depends on the process ICU locale and
+// would break identical-input ⇒ identical-output across machines.
+function byCodeUnit(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
 export type AnalyzeToolName =
   | "cluster"
   | "outliers"
@@ -262,7 +268,7 @@ function vectorPlan(
       return async () => {
         const view = await collect();
         return withPaths(view, outlierScores(view))
-          .sort((a, b) => b.score - a.score || a.id.localeCompare(b.id))
+          .sort((a, b) => b.score - a.score || byCodeUnit(a.id, b.id))
           .slice(0, topN);
       };
     }
@@ -272,7 +278,7 @@ function vectorPlan(
       return async () => {
         const view = await collect();
         return withPaths(view, localOutlierScores(view, { k }))
-          .sort((a, b) => b.score - a.score || a.id.localeCompare(b.id))
+          .sort((a, b) => b.score - a.score || byCodeUnit(a.id, b.id))
           .slice(0, topN);
       };
     }
@@ -351,7 +357,7 @@ function structuralPlan(arbor: Arbor, input: Record<string, unknown>, readScope?
           ids: members.map((member) => member.id).sort(),
           paths: members.map((member) => member.path).sort(),
         }))
-        .sort((a, b) => (a.paths[0] ?? "").localeCompare(b.paths[0] ?? "") || a.hash.localeCompare(b.hash)),
+        .sort((a, b) => byCodeUnit(a.paths[0] ?? "", b.paths[0] ?? "") || byCodeUnit(a.hash, b.hash)),
     };
   };
 }

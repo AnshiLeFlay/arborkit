@@ -22,8 +22,6 @@ export interface VectorIndexPort {
   entries(): Promise<VectorIndexEntry[]>;
 }
 
-/** Unit-normalize into a Float32Array; zero-norm vectors stay all-zeros
- *  (their dot with anything is 0 — matches cosine's zero-magnitude behavior). */
 /** In-memory brute-force index. Vectors are stored as Float32Arrays (raw for
  *  `entries()`, unit-normalized for search) so `search` is a plain dot product
  *  — the cosine of two normalized vectors. Correct and simple at current scale. */
