@@ -7,6 +7,7 @@ history, semantic search, persistence, and agent tools around the same node IDs.
 flowchart LR
   Runtime[LLM SDK or agent runtime] --> Bridge[Agent tool definitions and executor]
   Bridge --> Toolset[Scoped toolset]
+  Bridge --> Analysis[Read-only analysis tools]
   Toolset --> Navigator[Navigator]
   Toolset --> Mutator[Mutator]
   Toolset --> Replay[Replay and time travel]
@@ -15,6 +16,8 @@ flowchart LR
   Mutator --> Log[Append-only event log]
   Mutator -. marks stale .-> Semantic[Semantic index]
   Semantic --> Vectors[VectorIndexPort]
+  Analysis --> Vectors
+  Analysis --> Tree
   Tree --> Persistence[StoragePort or DeltaStoragePort]
   Log --> Persistence
   Vectors --> Persistence
@@ -34,6 +37,8 @@ flowchart LR
 | `Replay` | Reconstructs, diffs, and restores past states from the event log. |
 | `Toolset` | Applies read/write scopes, provides atomic batch mutation, and converts failures into structured results. |
 | `agent-tools` | Exposes profiled, provider-neutral input/output schemas and a guarded, approval-aware executor. |
+| Native analysis | Computes deterministic vector, structural, and graph metrics without domain verdicts. |
+| `analyze-tools` | Exposes the read-only analysis surface using Agent Bridge profiles, schemas, guards, and result caps. |
 | Storage ports | Persist a full artifact or a checkpoint plus append-only journal. |
 
 ## Write sequence
@@ -57,5 +62,7 @@ flowchart LR
 - Revert appends a new mutation instead of erasing history.
 - Semantic mutations are asynchronous: a write marks nodes stale and `reindex`
   later updates vectors.
+- Analysis returns measurements and structures only. Thresholds, labels, and
+  pass/fail interpretation belong to the consuming application.
 - Restoring a delta journal requires the same type registry and decomposition
   policy used by the original process.

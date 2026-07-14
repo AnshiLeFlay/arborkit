@@ -22,6 +22,12 @@ describe("M11: barrel exports the public surface", () => {
     expect(typeof arbor.AGENT_TOOL_PROFILES).toBe("object");
     expect(typeof arbor.agentToolDefs).toBe("function");
     expect(typeof arbor.makeToolExecutor).toBe("function");
+    expect(typeof arbor.kmeans).toBe("function");
+    expect(typeof arbor.structuralHash).toBe("function");
+    expect(typeof arbor.knnGraph).toBe("function");
+    expect(typeof arbor.ANALYZE_TOOL_PROFILES).toBe("object");
+    expect(typeof arbor.analyzeToolDefs).toBe("function");
+    expect(typeof arbor.makeAnalyzeExecutor).toBe("function");
     expect(typeof arbor.serializeArtifact).toBe("function");
     expect(typeof arbor.restoreArtifact).toBe("function");
     expect(typeof arbor.zodValidate).toBe("function");

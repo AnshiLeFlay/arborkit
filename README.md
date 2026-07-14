@@ -28,6 +28,7 @@ is deliberately single-process and single-writer.
 - [Decision guide: ArborKit vs LangGraph, Mastra, Automerge, Yjs, and Liveblocks](docs/decision-guide.md)
 - [Architecture and invariants](docs/architecture.md)
 - [Agent bridge: tools, profiles, concurrency, and approvals](docs/agent-bridge.md)
+- [Native analysis: clusters, outliers, structure, and graphs](docs/native-analysis.md)
 - [Production checklist](docs/production-checklist.md)
 - [Runtime integration patterns](docs/integrations.md)
 
@@ -53,6 +54,7 @@ LLM SDK / agent runtime
 - **Replay** — reconstruct any past version, `diff` two versions, `revert` a node (append-only, path-addressed).
 - **Toolset** — hand an agent a scoped, async, structured-result bundle: `describe`/`get`/`find`/`search`/`patch`/`batchPatch`/`history`/`getAt`/`revert`. `batchPatch` applies `set`/`insert`/`remove`/`move`/`edit` atomically and rolls the whole batch back on failure. Writes are confined to `writeScope`, reads to `readScope`; errors are returned, never thrown across the boundary.
 - **Agent bridge** — 13 provider-neutral LLM tools with input + output JSON Schemas, `reader`/`editor`/`admin` profiles, optimistic `ifVersion`, atomic `batch_patch`, full semantic-search filters, operation-level guards, async approvals, and a never-throw executor. LangChain `bindTools` accepts the definitions as-is; Anthropic needs a one-line `input_schema` mapping.
+- **Native analysis** — deterministic vector clustering/quality/outlier metrics, structural hashes and shape similarity, graph algorithms, and seven read-only LLM tools. Verdict-free by design: thresholds and domain labels stay in the application.
 - **AG-UI adapter** — expose the tree + log as [AG-UI](https://docs.ag-ui.com) shared-state events: `snapshotEvent` (STATE_SNAPSHOT) + `deltaSince` (STATE_DELTA with RFC 6902 JSON Patch ops). Zero-dep — plain objects shaped like AG-UI events, no AG-UI SDK required.
 - **Facade** — `createArbor`/`restoreArbor` wire all of the above in one call.
 
@@ -170,7 +172,8 @@ plus an NDJSON journal; a torn journal tail is isolated on restore.
 npm run example:content   # scoped agents build and edit a content site
 npm run example:research  # researchers and a synthesizer share one artifact
 npm run example:bridge    # provider-neutral LLM tool-call round-trip
-npm run example:all       # run all three
+npm run example:analysis  # read -> analyze -> fix with vector + structural metrics
+npm run example:all       # run all four
 ```
 
 ## Develop
@@ -192,6 +195,7 @@ module in `src/` maps onto `arborkit/<module>`.
 - [Decision guide](docs/decision-guide.md)
 - [Architecture](docs/architecture.md)
 - [Agent bridge](docs/agent-bridge.md)
+- [Native analysis](docs/native-analysis.md)
 - [Production checklist](docs/production-checklist.md)
 - [Runtime integrations](docs/integrations.md)
 - Full generated API reference: run `npm run docs:api`, then open
@@ -202,6 +206,6 @@ Historical design specs and implementation plans live in
 
 ## Status
 
-**v1.3 core complete through M20:** the original tree/mutation/index/storage/replay/toolset stack (M1–M19), plus agent-bridge parity: all core mutations, optimistic versions, atomic batches, profiles, output schemas, filtered semantic search, operation guards, and approvals.
+**v1.4 core complete through M21:** the original tree/mutation/index/storage/replay/toolset stack, the complete M20 agent bridge, and native verdict-free vector, structural, and graph analysis with a read-only LLM tool surface.
 
 Deferred (post-v1): an MCP-server adapter over the toolset; DB-backed storage & vector adapters (SQLite/sqlite-vec, Postgres/pgvector); a CRDT backend.

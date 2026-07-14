@@ -67,6 +67,7 @@ executor. This keeps advertised and executable capabilities identical.
 - [Decision guide](decision-guide.md) — fit, tradeoffs, and alternatives.
 - [Architecture](architecture.md) — components and invariants.
 - [Agent bridge](agent-bridge.md) — profiles, atomic writes, guards, and approvals.
+- [Native analysis](native-analysis.md) — clusters, outlier distances, structural comparison, and graph metrics.
 - [Runtime integrations](integrations.md) — LangChain/LangGraph, Anthropic, and Mastra patterns.
 - [Production checklist](production-checklist.md) — current operational boundaries.
 - Run all repository examples with `npm run example:all`.

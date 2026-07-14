@@ -1,4 +1,5 @@
 import type { NodeId } from "./types";
+import { dot, normalize } from "./vec-math";
 
 export interface VectorIndexEntry {
   nodeId: NodeId;
@@ -23,23 +24,6 @@ export interface VectorIndexPort {
 
 /** Unit-normalize into a Float32Array; zero-norm vectors stay all-zeros
  *  (their dot with anything is 0 — matches cosine's zero-magnitude behavior). */
-function normalize(v: ArrayLike<number>): Float32Array {
-  const out = new Float32Array(v.length);
-  let n = 0;
-  for (let i = 0; i < v.length; i++) n += v[i] * v[i];
-  if (n === 0) return out;
-  const inv = 1 / Math.sqrt(n);
-  for (let i = 0; i < v.length; i++) out[i] = v[i] * inv;
-  return out;
-}
-
-function dot(a: Float32Array, b: Float32Array): number {
-  const len = Math.min(a.length, b.length);
-  let d = 0;
-  for (let i = 0; i < len; i++) d += a[i] * b[i];
-  return d;
-}
-
 /** In-memory brute-force index. Vectors are stored as Float32Arrays (raw for
  *  `entries()`, unit-normalized for search) so `search` is a plain dot product
  *  — the cosine of two normalized vectors. Correct and simple at current scale. */

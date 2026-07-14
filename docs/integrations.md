@@ -63,3 +63,8 @@ return result.value;
 The repository's runnable [runtime bridge example](../examples/runtime-bridge.ts)
 demonstrates the definitions, Anthropic mapping, allowlisted executor, and tool
 result round-trip without requiring a particular model SDK.
+
+Read-only analysis definitions can be appended to the same provider tool list
+and routed to a separate executor holding the full Arbor instance. See
+[Native analysis](native-analysis.md#give-analysis-tools-to-an-agent) for the
+composition pattern.

@@ -1,7 +1,7 @@
 {
   "name": "arborkit",
-  "version": "1.3.0",
-  "description": "A versioned, searchable JSON workspace for AI agents: scoped edits, semantic discovery, audit history, time-travel, and delta persistence.",
+  "version": "1.4.0",
+  "description": "A versioned, searchable, analyzable JSON workspace for AI agents: scoped edits, semantic discovery, audit history, and time-travel.",
   "keywords": [
     "agents",
     "multi-agent",
@@ -11,6 +11,9 @@
     "event-sourcing",
     "time-travel",
     "semantic-search",
+    "clustering",
+    "outlier-detection",
+    "graph-analysis",
     "blackboard",
     "llm",
     "ag-ui",
@@ -50,6 +53,22 @@
     "./agent-tools": {
       "types": "./dist/agent-tools.d.ts",
       "import": "./dist/agent-tools.js"
+    },
+    "./analyze": {
+      "types": "./dist/analyze.d.ts",
+      "import": "./dist/analyze.js"
+    },
+    "./analyze-graph": {
+      "types": "./dist/analyze-graph.d.ts",
+      "import": "./dist/analyze-graph.js"
+    },
+    "./analyze-struct": {
+      "types": "./dist/analyze-struct.d.ts",
+      "import": "./dist/analyze-struct.js"
+    },
+    "./analyze-tools": {
+      "types": "./dist/analyze-tools.d.ts",
+      "import": "./dist/analyze-tools.js"
     },
     "./arbor": {
       "types": "./dist/arbor.d.ts",
@@ -155,6 +174,10 @@
       "types": "./dist/vector-index-port.d.ts",
       "import": "./dist/vector-index-port.js"
     },
+    "./vec-math": {
+      "types": "./dist/vec-math.d.ts",
+      "import": "./dist/vec-math.js"
+    },
     "./zod-adapter": {
       "types": "./dist/zod-adapter.d.ts",
       "import": "./dist/zod-adapter.js"
@@ -176,7 +199,8 @@
     "example:content": "tsx examples/content-site.ts",
     "example:research": "tsx examples/research-artifact.ts",
     "example:bridge": "tsx examples/runtime-bridge.ts",
-    "example:all": "npm run example:content && npm run example:research && npm run example:bridge"
+    "example:analysis": "tsx examples/native-analysis.ts",
+    "example:all": "npm run example:content && npm run example:research && npm run example:bridge && npm run example:analysis"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",

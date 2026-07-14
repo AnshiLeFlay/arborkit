@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.4.0 — 2026-07-14
+
+- Added a deterministic, zero-dependency native analysis layer: seeded k-means++,
+  silhouette, global-centroid and kNN-local distance scores, nearest-centroid
+  classification, and numeric score diffs.
+- Added exact canonical subtree hashes, value-independent shape tokens,
+  Jaccard/MinHash similarity, cosine k-NN graphs, connected components, directed
+  cycle/topological/degree/reachability/orphan algorithms, and shared vector math.
+- Added seven read-only analysis tools with input/output JSON Schemas,
+  `reader`/`editor`/`admin` profile parity, filters, freshness control, async guards,
+  enforced `readScope`, result caps, and never-throw JSON execution.
+- `structural_groups.relativePath` compares repeated nested sections across
+  otherwise different documents and reports missing selected subtrees explicitly.
+- Analysis remains verdict-free: it returns scores, assignments, groups, and
+  graphs; domain thresholds and labels remain the caller's responsibility.
+- Added public `analyze`, `analyze-struct`, `analyze-graph`, `analyze-tools`, and
+  `vec-math` subpaths, an adoption guide, and a runnable `read → analyze → fix` example.
+
 ## 1.3.0 — 2026-07-14
 
 - **Atomic toolset batches:** `Toolset.batchPatch(steps)` applies any combination

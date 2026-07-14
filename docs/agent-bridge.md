@@ -91,3 +91,7 @@ const execute = makeToolExecutor(toolset, {
 For a batch, ArborKit validates and invokes the hooks once per contained
 operation before dispatching anything. One refusal leaves the entire batch
 untouched.
+
+Read-only analytics use the same definition and never-throw result contract via
+`analyzeToolDefs` and `makeAnalyzeExecutor`. See [Native analysis](native-analysis.md)
+for composing both surfaces in one model tool loop.

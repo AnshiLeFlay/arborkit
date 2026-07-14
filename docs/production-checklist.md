@@ -46,6 +46,9 @@ code that can access the tree or `Mutator` directly.
 ## Limits and observability
 
 - [ ] Maximum artifact, subtree read, tool-result, and event-log sizes are defined.
+- [ ] Analysis filters bound materialized vector sets; O(n²) silhouette and k-NN
+  graph calls are tested at the expected production size.
+- [ ] Domain thresholds and verdicts are versioned and tested outside ArborKit.
 - [ ] Tool failures, stale-version errors, checkpoints, restores, and index lag are logged.
 - [ ] Benchmarks represent the expected node count and mutation pattern.
 - [ ] Node.js and ArborKit versions are pinned and upgrades run restore tests.

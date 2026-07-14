@@ -32,8 +32,8 @@ export type AgentToolProfile = "reader" | "editor" | "admin";
 /** Plain JSON tool definition. LangChain bindTools accepts `schema` as-is;
  * Anthropic callers rename it to `input_schema`. `outputSchema` describes the
  * serialized ToolResult returned by makeToolExecutor. */
-export interface AgentToolDef {
-  name: AgentToolName;
+export interface AgentToolDef<TName extends string = AgentToolName> {
+  name: TName;
   description: string;
   schema: Record<string, unknown>;
   outputSchema: Record<string, unknown>;
@@ -48,15 +48,15 @@ export interface ToolRefusal {
 
 /** Operation-level domain veto. For batch_patch it is called once per contained
  * operation, before the atomic batch starts. Sync and async guards are accepted. */
-export type ToolGuard = (
-  toolName: AgentToolName,
+export type ToolGuard<TName extends string = AgentToolName> = (
+  toolName: TName,
   input: Record<string, unknown>,
 ) => ToolRefusal | null | undefined | Promise<ToolRefusal | null | undefined>;
 
 /** Human/policy approval hook. `false` returns APPROVAL_DENIED before dispatch.
  * For batch_patch every contained operation must be approved before any write. */
-export type ToolApproval = (
-  toolName: AgentToolName,
+export type ToolApproval<TName extends string = AgentToolName> = (
+  toolName: TName,
   input: Record<string, unknown>,
 ) => boolean | Promise<boolean>;
 

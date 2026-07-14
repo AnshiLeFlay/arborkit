@@ -12,6 +12,11 @@ const SMOKE = `
 import { ArtifactTree, Addressing, EventLog, Mutator, makeToolset, sizeBasedDecision, SeqIdGen, SystemClock, serializeArtifact, restoreArtifact, MemoryStorage, MemoryVectorIndex } from "arborkit";
 import { createArbor } from "arborkit";
 import { Replay } from "arborkit/replay";
+import { kmeans } from "arborkit/analyze";
+import { structuralHash } from "arborkit/analyze-struct";
+import { knnGraph } from "arborkit/analyze-graph";
+import { analyzeToolDefs } from "arborkit/analyze-tools";
+import { cosine } from "arborkit/vec-math";
 
 const deps = { idGen: new SeqIdGen(), clock: new SystemClock(), decision: sizeBasedDecision(1) };
 const tree = ArtifactTree.fromJson({ pages: {} }, deps);
@@ -59,6 +64,11 @@ if (before !== undefined) throw new Error("expected node absent at v0");
 
 const a = createArbor({ initial: { x: 1 } });
 if (JSON.stringify(a.tree.toJson()) !== '{"x":1}') throw new Error("facade smoke failed");
+if (kmeans([{ id: "a", vector: [0] }], { k: 1 }).k !== 1) throw new Error("analyze subpath failed");
+if (structuralHash({ a: 1 }) !== structuralHash({ a: 1 })) throw new Error("structural subpath failed");
+if (knnGraph([{ id: "a", vector: [1] }], { k: 1 }).nodes[0] !== "a") throw new Error("graph subpath failed");
+if (analyzeToolDefs().length !== 7) throw new Error("analyze-tools subpath failed");
+if (cosine([1], [1]) !== 1) throw new Error("vec-math subpath failed");
 
 console.log("SMOKE_OK");
 `;
