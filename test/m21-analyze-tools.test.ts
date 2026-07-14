@@ -33,7 +33,7 @@ describe("M21 analysis tool definitions", () => {
     const definitions = analyzeToolDefs({ profile: "reader" });
     expect(definitions.map((definition) => definition.name)).toEqual(ALL_NAMES);
     expect(definitions.every((definition) => definition.schema.type === "object")).toBe(true);
-    expect(definitions.every((definition) => "oneOf" in definition.outputSchema)).toBe(true);
+    expect(definitions.every((definition) => "oneOf" in definition.outputSchema!)).toBe(true);
   });
 
   it("uses profile/include intersection without widening capabilities", () => {
