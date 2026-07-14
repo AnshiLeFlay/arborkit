@@ -18,6 +18,31 @@
 - Added public `analyze`, `analyze-struct`, `analyze-graph`, `analyze-tools`, and
   `vec-math` subpaths, an adoption guide, and a runnable `read → analyze → fix` example.
 
+### Fixed (pre-release review round)
+
+- **`batch_patch` can no longer widen a narrowed surface**: every contained
+  operation is checked against the executor's allowed tools, so an
+  `include`-narrowed executor refuses e.g. a wrapped `remove` with
+  `UNKNOWN_TOOL` before guards, approvals, and dispatch. To use an operation
+  inside batches, list its tool in the surface alongside `batch_patch`.
+- Shared schema leaves introduced in 1.3.0 (`key.oneOf`, `freshness.enum`,
+  patch-result internals) are frozen deeply; mutating them previously
+  contaminated every future `agentToolDefs()` call.
+- The `maxResultChars` cap applies to reads only. A large committed write
+  (typically a successful batch) was returned as `TOO_LARGE`, inviting the
+  model to retry and double-apply.
+- Guard/approval hooks receive batch operations in the standalone-call shape
+  (the `op` discriminator is stripped), so one hook covers both entry points.
+- `AgentToolDef.outputSchema` is optional again, restoring the documented
+  clone-and-extend pattern for consumers constructing their own definitions.
+- A node keyed `"__proto__"` (reachable through the `insert` tool) existed in
+  the tree but silently vanished from `toJson`, `get`, and replay
+  reconstruction — object assembly hit the prototype setter. Assembly now
+  defines own properties and JSON Pointer navigation uses own-property reads.
+- Analysis-layer determinism across machines: every ordering uses code-unit
+  comparison instead of locale-dependent `localeCompare`; `knnGraph` validates
+  vector dimensions and drops non-finite edge weights.
+
 ## 1.3.0 — 2026-07-14
 
 - **Atomic toolset batches:** `Toolset.batchPatch(steps)` applies any combination
@@ -37,12 +62,14 @@
   `approval` callback returns `APPROVAL_DENIED` before dispatch; all batch guards
   and approvals finish before the atomic write starts.
 
+### Docs
+
 - Repositioned ArborKit as a versioned, searchable JSON workspace embedded in
   any agent runtime, with an explicit decision guide and architecture overview.
 - Added a production-readiness checklist and integration patterns for
   LangChain/LangGraph, Anthropic, and Mastra.
 - Added runnable research-artifact and provider-neutral runtime-bridge examples;
-  `npm run example:all` now exercises all three documented product scenarios.
+  `npm run example:all` runs every documented example scenario.
 - Added reproducible TypeDoc API generation via `npm run docs:api` and its CI gate.
 
 ## 1.2.1 — 2026-07-06

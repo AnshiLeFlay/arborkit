@@ -13,7 +13,10 @@ Schema (`schema`) and a full `ToolResult` output JSON Schema (`outputSchema`).
 | `admin` | Every tool, including remove, revert, and atomic batch. |
 
 `include` further narrows a profile. It never adds a capability excluded by the
-profile.
+profile. The narrowed surface also applies inside `batch_patch`: an operation
+whose tool is outside the surface refuses the whole batch with `UNKNOWN_TOOL`,
+so a batch can never widen what `include`/`profile` granted. To use an operation
+inside batches, list its tool in the surface alongside `batch_patch`.
 
 For upgrade safety, omitting both options preserves the v1.2 nine-tool surface.
 New `insert`/`remove`/`move`/`batch_patch` capabilities require explicit opt-in.
@@ -90,7 +93,14 @@ const execute = makeToolExecutor(toolset, {
 
 For a batch, ArborKit validates and invokes the hooks once per contained
 operation before dispatching anything. One refusal leaves the entire batch
-untouched.
+untouched. Each hook receives the operation in the same shape as the standalone
+tool call — the `op` discriminator is stripped — so one guard implementation
+covers both entry points.
+
+The `maxResultChars` cap applies to read results only. A committed write
+(including a large successful batch) always returns its real `ok` result:
+reporting it as `TOO_LARGE` would invite the model to retry and apply the
+mutation twice.
 
 Read-only analytics use the same definition and never-throw result contract via
 `analyzeToolDefs` and `makeAnalyzeExecutor`. See [Native analysis](native-analysis.md)
