@@ -28,6 +28,23 @@ describe("M21 vector analytics", () => {
     expect(kmeans([A, C], { k: 1 }).centroids[0]).toEqual([5, 5]);
   });
 
+  it("handles degenerate k-means inputs deterministically", () => {
+    const identical = ["a", "b", "c"].map((id) => ({ id, vector: [1, 1] }));
+    const collapsed = kmeans(identical, { k: 2 });
+    expect(collapsed.k).toBe(2);
+    expect(collapsed.assignments).toHaveLength(3);
+    expect(collapsed.inertia).toBe(0);
+    expect(kmeans(identical, { k: 2 })).toEqual(collapsed);
+
+    const clamped = kmeans([A, C], { k: 5 });
+    expect(clamped.k).toBe(2);
+    expect(new Set(clamped.assignments).size).toBe(2);
+
+    expect(() => kmeans([A], { k: 0 })).toThrow("positive integer");
+    expect(() => kmeans([A, { id: "odd", vector: [1, 2, 3] }], { k: 1 })).toThrow("same dimension");
+    expect(() => classifyNearest([A], [])).toThrow("labelled centroid");
+  });
+
   it("returns global and local distance scores without verdicts", () => {
     const global = Object.fromEntries(outlierScores([A, B, C]).map((score) => [score.id, score.score]));
     expect(global.c).toBeGreaterThan(global.a);

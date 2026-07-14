@@ -36,7 +36,7 @@ export interface AgentToolDef<TName extends string = AgentToolName> {
   name: TName;
   description: string;
   schema: Record<string, unknown>;
-  outputSchema: Record<string, unknown>;
+  outputSchema?: Record<string, unknown>;
 }
 
 export const DEFAULT_MAX_RESULT_CHARS = 20_000;
@@ -47,7 +47,8 @@ export interface ToolRefusal {
 }
 
 /** Operation-level domain veto. For batch_patch it is called once per contained
- * operation, before the atomic batch starts. Sync and async guards are accepted. */
+ * operation, before the atomic batch starts; the input has the same shape as the
+ * standalone tool call (no `op` discriminator). Sync and async guards are accepted. */
 export type ToolGuard<TName extends string = AgentToolName> = (
   toolName: TName,
   input: Record<string, unknown>,
@@ -60,12 +61,18 @@ export type ToolApproval<TName extends string = AgentToolName> = (
   input: Record<string, unknown>,
 ) => boolean | Promise<boolean>;
 
+// Shared schema leaves are frozen DEEPLY: `agentToolDefs` reuses them across
+// every def and every call, so a mutable nested array/object would let one
+// consumer's mutation contaminate all future defs (extend-not-mutate contract).
 const str = Object.freeze({ type: "string" } as const);
 const int = Object.freeze({ type: "integer" } as const);
 const bool = Object.freeze({ type: "boolean" } as const);
-const key = Object.freeze({ oneOf: [str, int] } as const);
+const key = Object.freeze({ oneOf: Object.freeze([str, int]) } as const);
 const anyJson = Object.freeze({ description: "Any JSON value" } as const);
-const freshness = Object.freeze({ type: "string", enum: ["best-effort", "wait"] } as const);
+const freshness = Object.freeze({
+  type: "string",
+  enum: Object.freeze(["best-effort", "wait"]),
+} as const);
 
 function objectSchema(
   properties: Record<string, unknown>,
@@ -76,8 +83,8 @@ function objectSchema(
 
 const patchResultSchema = Object.freeze({
   type: "object",
-  properties: { id: str, path: str, version: int },
-  required: ["id", "path", "version"],
+  properties: Object.freeze({ id: str, path: str, version: int }),
+  required: Object.freeze(["id", "path", "version"]),
   additionalProperties: false,
 } as const);
 
@@ -248,6 +255,18 @@ const TOOL_NAMES: readonly AgentToolName[] = Object.freeze([
   "get_at",
   "revert",
 ]);
+// Tools whose dispatch commits writes. Their ok-results are exempt from the
+// maxResultChars cap: a committed mutation reported as an error invites the
+// model to retry and double-apply.
+const WRITE_TOOLS: ReadonlySet<AgentToolName> = new Set([
+  "edit",
+  "set_value",
+  "insert",
+  "remove",
+  "move",
+  "batch_patch",
+  "revert",
+]);
 const LEGACY_DEFAULT_TOOLS: readonly AgentToolName[] = Object.freeze([
   "search",
   "find",
@@ -316,6 +335,9 @@ export function agentToolDefs(opts: AgentToolSurfaceOptions = {}): AgentToolDef[
 }
 
 class InputError extends Error {}
+// A batch operation outside the executor's allowed surface. Raised while
+// planning — before operation parsing and before any guard/approval runs.
+class SurfaceError extends Error {}
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -424,7 +446,11 @@ interface ExecutionPlan {
   checks: OperationCheck[];
 }
 
-function plan(name: AgentToolName, input: Record<string, unknown>): ExecutionPlan {
+function plan(
+  name: AgentToolName,
+  input: Record<string, unknown>,
+  allowed: readonly AgentToolName[],
+): ExecutionPlan {
   const single = (dispatch: Dispatch): ExecutionPlan => ({ dispatch, checks: [{ name, input }] });
   switch (name) {
     case "search": {
@@ -475,13 +501,19 @@ function plan(name: AgentToolName, input: Record<string, unknown>): ExecutionPla
           throw new InputError(`operations[${index}].op must be one of: ${mutationNames.join(", ")}`);
         }
         const operationName = op as MutationToolName;
+        if (!allowed.includes(operationName)) {
+          throw new SurfaceError(
+            `batch operation "${operationName}" is not enabled for this executor; available: ${allowed.join(", ")}`,
+          );
+        }
         try {
           steps.push(mutationStep(operationName, raw));
         } catch (error) {
           if (error instanceof InputError) throw new InputError(`operations[${index}]: ${error.message}`);
           throw error;
         }
-        checks.push({ name: operationName, input: raw });
+        const { op: _discriminator, ...guardInput } = raw;
+        checks.push({ name: operationName, input: guardInput });
       }
       return { dispatch: (toolset) => toolset.batchPatch(steps), checks };
     }
@@ -526,7 +558,9 @@ export interface ToolExecutorOptions extends AgentToolSurfaceOptions {
 }
 
 /** Build a never-throw `(toolName, input) -> JSON string` executor. Validation,
- * every batch guard, and every approval complete before dispatch starts. */
+ * every batch guard, and every approval complete before dispatch starts. Batch
+ * operations are checked against the same allowed surface as top-level tools, so
+ * `include`/`profile` can never be widened by wrapping an operation in batch_patch. */
 export function makeToolExecutor(
   toolset: Toolset,
   opts: ToolExecutorOptions = {},
@@ -547,7 +581,7 @@ export function makeToolExecutor(
 
     let result: ToolResult<unknown>;
     try {
-      const execution = plan(name, input);
+      const execution = plan(name, input, allowed);
       for (const operation of execution.checks) {
         const refusal = opts.guard === undefined ? null : await opts.guard(operation.name, operation.input);
         if (refusal != null) {
@@ -559,12 +593,13 @@ export function makeToolExecutor(
       }
       result = await execution.dispatch(toolset);
     } catch (error) {
+      if (error instanceof SurfaceError) return errorResult("UNKNOWN_TOOL", error.message);
       if (error instanceof InputError) return errorResult("INVALID_INPUT", error.message);
       return errorResult("EXECUTOR_ERROR", error instanceof Error ? error.message : String(error));
     }
 
     const serialized = JSON.stringify(result);
-    if (result.ok && serialized.length > cap) {
+    if (result.ok && !WRITE_TOOLS.has(name) && serialized.length > cap) {
       return errorResult(
         "TOO_LARGE",
         `result is ${serialized.length} chars (cap ${cap}) — narrow the request and retry: ` +

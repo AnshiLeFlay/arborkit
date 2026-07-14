@@ -1,6 +1,12 @@
 import type { LabeledVector } from "./analyze";
 import { cosine } from "./vec-math";
 
+// Code-unit string order: localeCompare depends on the process ICU locale and
+// would break identical-input ⇒ identical-output across machines.
+function byCodeUnit(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
 export interface SimEdge {
   a: string;
   b: string;
@@ -20,9 +26,13 @@ export function knnGraph(
   opts: { k: number; minWeight?: number },
 ): SimGraph {
   if (!Number.isInteger(opts.k) || opts.k <= 0) throw new Error("knnGraph(): k must be a positive integer");
-  const items = [...view].sort((a, b) => a.id.localeCompare(b.id));
+  const items = [...view].sort((a, b) => byCodeUnit(a.id, b.id));
   if (new Set(items.map((item) => item.id)).size !== items.length) {
     throw new Error("knnGraph(): node ids must be unique");
+  }
+  const dimension = items[0]?.vector.length ?? 0;
+  if (items.some((item) => item.vector.length !== dimension)) {
+    throw new Error("knnGraph(): vectors must all have the same dimension");
   }
   const minWeight = opts.minWeight ?? -Infinity;
   const edges = new Map<string, SimEdge>();
@@ -32,7 +42,10 @@ export function knnGraph(
         index: otherIndex,
         weight: otherIndex === index ? -Infinity : cosine(items[index].vector, other.vector),
       }))
-      .sort((a, b) => b.weight - a.weight || items[a.index].id.localeCompare(items[b.index].id))
+      // Drops self (-Infinity) and NaN weights: NaN passes a `< minWeight`
+      // filter and makes the neighbour sort order unspecified.
+      .filter((candidate) => Number.isFinite(candidate.weight))
+      .sort((a, b) => b.weight - a.weight || byCodeUnit(items[a.index].id, items[b.index].id))
       .slice(0, Math.min(opts.k, Math.max(0, items.length - 1)));
     for (const neighbour of neighbours) {
       if (neighbour.weight < minWeight) continue;
@@ -43,7 +56,7 @@ export function knnGraph(
   }
   return {
     nodes: items.map((item) => item.id),
-    edges: [...edges.values()].sort((left, right) => left.a.localeCompare(right.a) || left.b.localeCompare(right.b)),
+    edges: [...edges.values()].sort((left, right) => byCodeUnit(left.a, right.a) || byCodeUnit(left.b, right.b)),
   };
 }
 
@@ -74,7 +87,7 @@ export function connectedComponents(nodes: string[], edges: SimEdge[]): string[]
     group.push(node);
     groups.set(root, group);
   }
-  return [...groups.values()].sort((a, b) => a[0].localeCompare(b[0]));
+  return [...groups.values()].sort((a, b) => byCodeUnit(a[0], b[0]));
 }
 
 function graphNodes(graph: Digraph): string[] {
@@ -111,7 +124,7 @@ export function findCycles(graph: Digraph): string[][] {
     color.set(node, 2);
   };
   for (const node of graphNodes(graph)) if (color.get(node) === 0) visit(node);
-  return [...found.values()].sort((a, b) => a.join("\0").localeCompare(b.join("\0")));
+  return [...found.values()].sort((a, b) => byCodeUnit(a.join("\0"), b.join("\0")));
 }
 
 /** Kahn topological order, or null when the graph contains a cycle. */
@@ -141,7 +154,15 @@ export function topoSort(graph: Digraph): string[] | null {
 /** In/out degree per directed-graph node. */
 export function degrees(graph: Digraph): Record<string, { in: number; out: number }> {
   const result: Record<string, { in: number; out: number }> = {};
-  for (const node of graphNodes(graph)) result[node] = { in: 0, out: 0 };
+  for (const node of graphNodes(graph)) {
+    // defineProperty: a "__proto__" node name must become an own property.
+    Object.defineProperty(result, node, {
+      value: { in: 0, out: 0 },
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    });
+  }
   for (const [node, targets] of graph) {
     result[node].out += targets.length;
     for (const target of targets) result[target].in++;

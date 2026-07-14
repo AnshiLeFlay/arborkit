@@ -2,6 +2,12 @@ import type { Arbor } from "./arbor";
 import { isWithin } from "./jsonpointer";
 import { centroid, euclidean } from "./vec-math";
 
+// Code-unit string order: localeCompare depends on the process ICU locale and
+// would break identical-input ⇒ identical-output across machines.
+function byCodeUnit(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
 /** A tree node projected into vector space for domain-agnostic analysis. */
 export interface LabeledVector {
   id: string;
@@ -43,7 +49,7 @@ export async function collectVectors(
       tags: node.tags === undefined ? undefined : [...node.tags],
     });
   }
-  result.sort((a, b) => (a.path ?? "").localeCompare(b.path ?? "") || a.id.localeCompare(b.id));
+  result.sort((a, b) => byCodeUnit(a.path ?? "", b.path ?? "") || byCodeUnit(a.id, b.id));
   return result;
 }
 

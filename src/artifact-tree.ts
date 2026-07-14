@@ -115,7 +115,14 @@ export class ArtifactTree {
     const obj: Record<string, Json> = {};
     for (const cid of n.childIds) {
       const c = this.nodes.get(cid)!;
-      obj[String(c.key)] = this.toJson(cid);
+      // defineProperty: plain assignment of a "__proto__" key would hit the
+      // prototype setter and silently drop the child from the result.
+      Object.defineProperty(obj, String(c.key), {
+        value: this.toJson(cid),
+        enumerable: true,
+        writable: true,
+        configurable: true,
+      });
     }
     return obj;
   }

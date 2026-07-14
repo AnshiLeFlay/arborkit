@@ -23,15 +23,16 @@ Useful scripts:
 | `npm run test:watch`| Watch mode                                    |
 | `npm run typecheck` | `tsc --noEmit` — no type errors allowed       |
 | `npm run build`     | Bundle with tsup (must succeed)               |
+| `npm run docs:api`  | Generate the TypeDoc API reference            |
 | `npm run bench`     | Micro-benchmarks (optional, for perf changes) |
 
 ## Before you open a PR
 
-CI runs `npm test`, `npm run typecheck`, and `npm run build` on Node 20 and 22.
-Run all three locally first — a green PR merges faster:
+CI runs `npm test`, `npm run typecheck`, `npm run build`, and `npm run docs:api`
+on Node 20 and 22. Run them locally first — a green PR merges faster:
 
 ```bash
-npm test && npm run typecheck && npm run build
+npm test && npm run typecheck && npm run build && npm run docs:api
 ```
 
 Guidelines:

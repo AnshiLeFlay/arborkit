@@ -57,7 +57,7 @@ describe("M20 agent bridge definitions and profiles", () => {
     expect(defs.map((def) => def.name)).toEqual(ALL_NAMES);
     for (const def of defs) {
       expect(def.schema["type"]).toBe("object");
-      expect(def.outputSchema["oneOf"]).toBeInstanceOf(Array);
+      expect(def.outputSchema!["oneOf"]).toBeInstanceOf(Array);
     }
 
     for (const name of ["edit", "set_value", "insert", "remove", "move"] as const) {
@@ -208,7 +208,158 @@ describe("M20 agent bridge search filters", () => {
   });
 });
 
+describe("M20 surface narrowing is batch-proof", () => {
+  it("batch_patch cannot widen a narrowed include surface", async () => {
+    const { tree, tools } = setup();
+    const execute = makeToolExecutor(tools, { include: ["get", "edit", "batch_patch"] });
+
+    const direct = parse(await execute("remove", { path: "/pages/home/body" }));
+    expect(direct.ok).toBe(false);
+    if (!direct.ok) expect(direct.error.code).toBe("UNKNOWN_TOOL");
+
+    const viaBatch = parse(
+      await execute("batch_patch", { operations: [{ op: "remove", path: "/pages/home/body" }] }),
+    );
+    expect(viaBatch.ok).toBe(false);
+    if (!viaBatch.ok) expect(viaBatch.error.code).toBe("UNKNOWN_TOOL");
+    expect((tree.toJson() as any).pages.home.body).toBe("Hello");
+
+    const allowedBatch = parse(
+      await execute("batch_patch", {
+        operations: [{ op: "edit", path: "/pages/home/body", old: "Hello", new: "Hi" }],
+      }),
+    );
+    expect(allowedBatch.ok).toBe(true);
+    expect((tree.toJson() as any).pages.home.body).toBe("Hi");
+  });
+
+  it("refuses a mixed batch atomically, before any guard or approval runs", async () => {
+    const { tree, log, tools } = setup();
+    const hookCalls: string[] = [];
+    const execute = makeToolExecutor(tools, {
+      include: ["set_value", "batch_patch"],
+      guard: (name) => {
+        hookCalls.push(`guard:${name}`);
+        return null;
+      },
+      approval: (name) => {
+        hookCalls.push(`approval:${name}`);
+        return true;
+      },
+    });
+    const before = structuredClone(tree.toJson());
+    const result = parse(
+      await execute("batch_patch", {
+        operations: [
+          { op: "set_value", path: "/pages/home/title", value: "No commit" },
+          { op: "remove", path: "/pages/home/body" },
+        ],
+      }),
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("UNKNOWN_TOOL");
+    expect(hookCalls).toEqual([]);
+    expect(tree.toJson()).toEqual(before);
+    expect(log.length()).toBe(0);
+  });
+
+  it("reports UNKNOWN_TOOL for a disallowed operation even when its input is malformed", async () => {
+    const { tools } = setup();
+    const execute = makeToolExecutor(tools, { include: ["set_value", "batch_patch"] });
+    const result = parse(await execute("batch_patch", { operations: [{ op: "remove" }] }));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("UNKNOWN_TOOL");
+  });
+});
+
+describe("M20 shared schema leaves are deeply frozen", () => {
+  it("mutation attempts throw and cannot contaminate future defs", () => {
+    const reference = structuredClone(agentToolDefs({ profile: "admin" }));
+    const defs = agentToolDefs({ profile: "admin" });
+
+    const insertKey = (defs.find((def) => def.name === "insert")!.schema["properties"] as any).key;
+    expect(() => insertKey.oneOf.push({ type: "boolean" })).toThrow(TypeError);
+
+    const searchFreshness = (defs.find((def) => def.name === "search")!.schema["properties"] as any).freshness;
+    expect(() => searchFreshness.enum.push("stale-ok")).toThrow(TypeError);
+
+    const editOk = (defs.find((def) => def.name === "edit")!.outputSchema!["oneOf"] as any)[0];
+    const patchResult = editOk.properties.value;
+    expect(() => {
+      patchResult.properties.extra = { type: "string" };
+    }).toThrow(TypeError);
+    expect(() => patchResult.required.push("extra")).toThrow(TypeError);
+
+    expect(agentToolDefs({ profile: "admin" })).toEqual(reference);
+  });
+});
+
+describe("M20 result cap never masks committed writes", () => {
+  it("caps oversized reads but returns the full result for an oversized committed batch", async () => {
+    const { tree, tools } = setup();
+    const execute = makeToolExecutor(tools, { profile: "admin", maxResultChars: 60 });
+
+    const read = parse(await execute("get", { path: "/pages/home" }));
+    expect(read.ok).toBe(false);
+    if (!read.ok) expect(read.error.code).toBe("TOO_LARGE");
+
+    const write = parse(
+      await execute("batch_patch", {
+        operations: [
+          { op: "set_value", path: "/pages/home/title", value: "First" },
+          { op: "set_value", path: "/pages/home/body", value: "Second" },
+          { op: "set_value", path: "/pages/home/title", value: "Third" },
+        ],
+      }),
+    );
+    expect(write.ok).toBe(true);
+    if (write.ok) expect(write.value).toHaveLength(3);
+    expect((tree.toJson() as any).pages.home.title).toBe("Third");
+  });
+});
+
 describe("M20 operation guards and approvals", () => {
+  it("guard sees the same input shape for batch operations as for standalone calls", async () => {
+    const { tools } = setup();
+    const inputs: Array<Record<string, unknown>> = [];
+    const guard: ToolGuard = (_name, input) => {
+      inputs.push(input);
+      return null;
+    };
+    const execute = makeToolExecutor(tools, { profile: "admin", guard });
+    await execute("edit", { path: "/pages/home/body", old: "Hello", new: "Hi" });
+    await execute("batch_patch", {
+      operations: [{ op: "edit", path: "/pages/home/body", old: "Hi", new: "Hello" }],
+    });
+    expect(inputs).toHaveLength(2);
+    expect(inputs[1]).not.toHaveProperty("op");
+    expect(Object.keys(inputs[1]!).sort()).toEqual(Object.keys(inputs[0]!).sort());
+  });
+
+  it("denies the whole batch before any write when one operation fails approval", async () => {
+    const { tree, log, tools } = setup();
+    const asked: AgentToolName[] = [];
+    const approval: ToolApproval = (name) => {
+      asked.push(name);
+      return name !== "remove";
+    };
+    const execute = makeToolExecutor(tools, { profile: "admin", approval });
+    const before = structuredClone(tree.toJson());
+    const result = parse(
+      await execute("batch_patch", {
+        operations: [
+          { op: "set_value", path: "/pages/home/title", value: "No commit" },
+          { op: "remove", path: "/pages/home/body" },
+        ],
+      }),
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("APPROVAL_DENIED");
+    expect(asked).toEqual(["set_value", "remove"]);
+    expect(tree.toJson()).toEqual(before);
+    expect(log.length()).toBe(0);
+  });
+
   it("checks every batch operation before dispatch and leaves the batch untouched on refusal", async () => {
     const { tree, log, tools } = setup();
     const seen: AgentToolName[] = [];

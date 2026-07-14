@@ -150,7 +150,14 @@ export class Navigator {
       const obj: Record<string, Json> = {};
       for (const cid of n.childIds) {
         const c = this.tree.get(cid)!;
-        obj[String(c.key)] = reconstruct(cid, depth + 1);
+        // defineProperty: plain assignment of a "__proto__" key would hit the
+        // prototype setter and silently drop the child from the result.
+        Object.defineProperty(obj, String(c.key), {
+          value: reconstruct(cid, depth + 1),
+          enumerable: true,
+          writable: true,
+          configurable: true,
+        });
       }
       return obj;
     };

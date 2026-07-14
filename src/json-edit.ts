@@ -1,6 +1,17 @@
 import type { Json } from "./types";
 import { parsePointer } from "./jsonpointer";
 
+// Own-property semantics throughout: JSON data never has inherited keys, and a
+// "__proto__" segment must address a real child, not the prototype (reading
+// `cur["__proto__"]` returns Object.prototype; assigning it hits the setter).
+function readOwn(obj: Record<string, Json>, key: string): Json | undefined {
+  return Object.hasOwn(obj, key) ? obj[key] : undefined;
+}
+
+function defineOwn(obj: Record<string, Json>, key: string, value: Json): void {
+  Object.defineProperty(obj, key, { value, enumerable: true, writable: true, configurable: true });
+}
+
 /** Read the value at a JSON Pointer, or undefined if any segment is missing. */
 export function getAtPath(value: Json, pointer: string): Json | undefined {
   const segs = parsePointer(pointer);
@@ -10,7 +21,7 @@ export function getAtPath(value: Json, pointer: string): Json | undefined {
       const i = Number(seg);
       cur = Number.isInteger(i) && i >= 0 && i < cur.length ? cur[i] : undefined;
     } else if (cur !== null && typeof cur === "object") {
-      cur = seg in cur ? (cur as Record<string, Json>)[seg] : undefined;
+      cur = readOwn(cur as Record<string, Json>, seg);
     } else {
       return undefined;
     }
@@ -27,7 +38,7 @@ function navParent(root: Json, pointer: string): { parent: Json; key: string } |
   for (let i = 0; i < segs.length - 1; i++) {
     const seg = segs[i];
     if (Array.isArray(cur)) cur = cur[Number(seg)];
-    else if (cur !== null && typeof cur === "object") cur = (cur as Record<string, Json>)[seg];
+    else if (cur !== null && typeof cur === "object") cur = readOwn(cur as Record<string, Json>, seg);
     else return undefined;
     if (cur === undefined || cur === null) return undefined;
   }
@@ -40,7 +51,7 @@ export function setAtPathMut(value: Json, pointer: string, newVal: Json): Json {
   const pk = navParent(value, pointer);
   if (!pk || pk.parent === null || typeof pk.parent !== "object") return value;
   if (Array.isArray(pk.parent)) pk.parent[Number(pk.key)] = newVal;
-  else (pk.parent as Record<string, Json>)[pk.key] = newVal;
+  else defineOwn(pk.parent as Record<string, Json>, pk.key, newVal);
   return value;
 }
 
@@ -60,7 +71,7 @@ export function insertAtPathMut(value: Json, pointer: string, val: Json): Json {
   const pk = navParent(value, pointer);
   if (!pk || pk.parent === null || typeof pk.parent !== "object") return value;
   if (Array.isArray(pk.parent)) pk.parent.splice(Number(pk.key), 0, val);
-  else (pk.parent as Record<string, Json>)[pk.key] = val;
+  else defineOwn(pk.parent as Record<string, Json>, pk.key, val);
   return value;
 }
 

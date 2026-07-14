@@ -33,13 +33,21 @@ describe("M21 analysis tool definitions", () => {
     const definitions = analyzeToolDefs({ profile: "reader" });
     expect(definitions.map((definition) => definition.name)).toEqual(ALL_NAMES);
     expect(definitions.every((definition) => definition.schema.type === "object")).toBe(true);
-    expect(definitions.every((definition) => "oneOf" in definition.outputSchema)).toBe(true);
+    expect(definitions.every((definition) => "oneOf" in definition.outputSchema!)).toBe(true);
   });
 
   it("uses profile/include intersection without widening capabilities", () => {
     expect(analyzeToolDefs({ profile: "editor", include: ["cluster", "outliers"] }).map((d) => d.name))
       .toEqual(["cluster", "outliers"]);
     expect(analyzeToolDefs({ profile: "admin", include: [] })).toEqual([]);
+  });
+
+  it("deeply freezes shared schema leaves against contamination", () => {
+    const reference = structuredClone(analyzeToolDefs({ profile: "reader" }));
+    const defs = analyzeToolDefs({ profile: "reader" });
+    const freshness = (defs.find((d) => d.name === "cluster")!.schema["properties"] as any).freshness;
+    expect(() => freshness.enum.push("stale-ok")).toThrow(TypeError);
+    expect(analyzeToolDefs({ profile: "reader" })).toEqual(reference);
   });
 });
 
