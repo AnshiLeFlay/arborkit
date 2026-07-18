@@ -48,6 +48,8 @@ export interface Arbor {
   /** Present iff `embedding` was configured. */
   readonly index?: SemanticIndex;
   readonly vectors: VectorIndexPort;
+  /** Registry used to construct this artifact, exposed read-only for metadata adapters. */
+  readonly registry?: TypeRegistry;
   /** A scoped agent-facing toolset over this artifact. */
   toolset(binding?: ToolsetBinding): Toolset;
   /** Whole-artifact snapshot to `storage`. */
@@ -103,6 +105,7 @@ function assemble(
     replay,
     index,
     vectors,
+    registry: opts.registry,
     toolset: (binding) => makeToolset({ tree, addressing, log, mutator, index }, binding),
     save: async () => {
       if (!opts.storage) throw new InvalidOpError("save(): no storage configured");

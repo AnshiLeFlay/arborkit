@@ -1,0 +1,64 @@
+{
+  "name": "@arborkit/mcp",
+  "version": "1.5.0",
+  "description": "MCP server adapter for ArborKit artifacts",
+  "keywords": [
+    "mcp",
+    "agents",
+    "shared-state",
+    "arborkit"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AnshiLeFlay/arborkit.git",
+    "directory": "packages/mcp"
+  },
+  "homepage": "https://github.com/AnshiLeFlay/arborkit#readme",
+  "bugs": {
+    "url": "https://github.com/AnshiLeFlay/arborkit/issues"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=20.6"
+  },
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "arborkit-mcp": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "pretest": "npm run build --prefix ../.. && npm run build",
+    "test": "vitest run",
+    "prepack": "npm run build"
+  },
+  "peerDependencies": {
+    "arborkit": "^1.5.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "arborkit": "file:../..",
+    "@types/express": "^5.0.0",
+    "@types/node": "^20.14.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}

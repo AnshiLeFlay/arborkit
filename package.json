@@ -1,6 +1,6 @@
 {
   "name": "arborkit",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "A versioned, searchable, analyzable JSON workspace for AI agents: scoped edits, semantic discovery, audit history, and time-travel.",
   "keywords": [
     "agents",
@@ -187,6 +187,9 @@
     "dist",
     "CHANGELOG.md"
   ],
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "build": "tsup",
     "docs:api": "typedoc",
@@ -200,7 +203,13 @@
     "example:research": "tsx examples/research-artifact.ts",
     "example:bridge": "tsx examples/runtime-bridge.ts",
     "example:analysis": "tsx examples/native-analysis.ts",
-    "example:all": "npm run example:content && npm run example:research && npm run example:bridge && npm run example:analysis"
+    "example:all": "npm run example:content && npm run example:research && npm run example:bridge && npm run example:analysis",
+    "build:mcp": "npm run build --workspace @arborkit/mcp",
+    "typecheck:mcp": "npm run typecheck --workspace @arborkit/mcp",
+    "test:mcp": "npm run test --workspace @arborkit/mcp",
+    "build:all": "npm run build && npm run build:mcp",
+    "typecheck:all": "npm run typecheck && npm run typecheck:mcp",
+    "test:all": "npm test && npm run test:mcp"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",

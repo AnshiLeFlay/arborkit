@@ -53,6 +53,15 @@ code that can access the tree or `Mutator` directly.
 - [ ] Benchmarks represent the expected node count and mutation pattern.
 - [ ] Node.js and ArborKit versions are pinned and upgrades run restore tests.
 
+## MCP deployment
+
+- [ ] MCP defaults to `reader`; every `editor` or `admin` profile is intentional.
+- [ ] `resources.maxDepth`, `historyLimit`, and `maxResultChars` match the model context budget.
+- [ ] stdio diagnostics go to stderr; stdout contains protocol messages only.
+- [ ] Streamable HTTP binds to loopback, or a reverse proxy supplies authentication and an explicit Host allowlist.
+- [ ] The application config factory restores the correct registry, decomposition, embeddings, and persistence adapters.
+- [ ] Only one MCP process writes a given artifact; stateless MCP sessions do not make ArborKit multi-writer safe.
+
 ## Release gate
 
 ```bash
@@ -61,4 +70,7 @@ npm run typecheck
 npm run build
 npm run example:all
 npm run docs:api
+npm run test:mcp
+npm run typecheck:mcp
+npm run build:mcp
 ```

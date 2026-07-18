@@ -33,6 +33,7 @@ describe("M15 createArbor facade", () => {
     const registry = new TypeRegistry();
     registry.register("doc", { validate: zodValidate(z.object({ body: z.string() })), decompose: "opaque" });
     const arbor = createArbor(opts({ registry, initial: { docs: {} } }));
+    expect(arbor.registry).toBe(registry);
     expect(() => arbor.mutator.insert({ path: "/docs" }, "bad", { body: 42 }, { type: "doc" })).toThrow();
     arbor.mutator.insert({ path: "/docs" }, "good", { body: "ok" }, { type: "doc" });
     expect(arbor.addressing.byPath("/docs/good")!.kind).toBe("leaf"); // decompose:"opaque" honored

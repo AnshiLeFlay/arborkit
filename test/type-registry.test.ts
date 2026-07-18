@@ -27,6 +27,34 @@ describe("TypeRegistry", () => {
     expect(r.has("PageContent")).toBe(true);
   });
 
+  it("lists detached serializable metadata in deterministic name order", () => {
+    const r = new TypeRegistry();
+    const schema = { type: "object", properties: { title: { type: "string" } } };
+    r.register("page", {
+      description: "A content page",
+      jsonSchema: schema,
+      decompose: "children",
+      validate: () => undefined,
+      embedText: () => "page",
+    });
+    r.register("article", { decompose: "opaque" });
+
+    const listed = r.list();
+    expect(listed).toEqual([
+      { name: "article", decompose: "opaque", hasValidator: false, hasEmbedText: false },
+      {
+        name: "page",
+        description: "A content page",
+        jsonSchema: schema,
+        decompose: "children",
+        hasValidator: true,
+        hasEmbedText: true,
+      },
+    ]);
+    (listed[1].jsonSchema!.properties as Record<string, unknown>).title = { type: "number" };
+    expect(r.list()[1].jsonSchema).toEqual(schema);
+  });
+
   it("returns undefined and false for an unknown type", () => {
     const r = new TypeRegistry();
     expect(r.get("Nope")).toBeUndefined();

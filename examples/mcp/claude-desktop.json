@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "arborkit": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@arborkit/mcp",
+        "--config",
+        "/absolute/path/arborkit.mcp.mjs"
+      ]
+    }
+  }
+}

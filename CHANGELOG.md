@@ -1,5 +1,27 @@
 # Changelog
 
+## 1.5.0 — 2026-07-18
+
+- Added the separate `@arborkit/mcp` workspace package with a standard MCP server,
+  a config-driven `arborkit-mcp` CLI, local stdio, and stateless Streamable HTTP.
+- Exposed all enabled Agent Bridge tools with input/output JSON Schemas, structured
+  and text results, MCP safety annotations, profiles, scopes, guards, approvals,
+  optimistic concurrency, and atomic batches. Native analysis tools are opt-in.
+- Added scoped MCP resources for the artifact tree, stable-id subtrees, history,
+  artifact version metadata, and registered schema/type metadata, with bounded
+  depth, history, and serialized output.
+- Added DNS-rebinding-safe localhost HTTP defaults, explicit non-loopback Host
+  allowlists, graceful shutdown, official-client integration tests, and examples
+  for Claude, AI SDK, Mastra, and LangGraph/LangChain.
+- `TypeRegistry` now supports serializable descriptions/JSON Schemas and a
+  deterministic detached metadata listing; `Arbor.registry` exposes the registry
+  used by the facade.
+
+Migration: `arborkit` remains zero-runtime-dependency. Install `@arborkit/mcp`
+separately, provide an ESM config factory that creates/restores one `Arbor`
+instance, and explicitly opt into `editor` or `admin` because MCP defaults to
+`reader`.
+
 ## 1.4.0 — 2026-07-14
 
 - Added a deterministic, zero-dependency native analysis layer: seeded k-means++,

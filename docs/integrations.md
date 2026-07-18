@@ -3,6 +3,9 @@
 ArborKit owns artifact state and tool execution. The surrounding runtime owns
 model calls, scheduling, retries, and the conversation/tool-call loop.
 
+For clients that already speak MCP, prefer the separate `@arborkit/mcp` package
+instead of writing the in-process wrappers below. See [MCP server](mcp.md).
+
 ## LangChain and LangGraph
 
 `agentToolDefs()` returns `{ name, description, schema }` objects accepted by
@@ -68,3 +71,12 @@ Read-only analysis definitions can be appended to the same provider tool list
 and routed to a separate executor holding the full Arbor instance. See
 [Native analysis](native-analysis.md#give-analysis-tools-to-an-agent) for the
 composition pattern.
+
+## Standard MCP clients
+
+`@arborkit/mcp` exposes both tools and resources without a runtime-specific
+adapter. Use stdio for a local child process (Claude Desktop/Code, Mastra), or
+the stateless Streamable HTTP endpoint for server-side AI SDK and
+LangChain/LangGraph clients. The MCP layer delegates to the same agent executor,
+so profiles, `ifVersion`, guards, approvals, and atomic batches keep their core
+semantics.

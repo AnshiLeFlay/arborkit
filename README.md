@@ -10,6 +10,8 @@ LangGraph, Mastra, an SDK tool loop, or your own orchestrator.
 
 ```bash
 npm install arborkit
+# Optional standard MCP server:
+npm install @arborkit/mcp
 ```
 
 ESM-only, Node ≥ 20.6.
@@ -29,6 +31,7 @@ is deliberately single-process and single-writer.
 - [Architecture and invariants](docs/architecture.md)
 - [Agent bridge: tools, profiles, concurrency, and approvals](docs/agent-bridge.md)
 - [Native analysis: clusters, outliers, structure, and graphs](docs/native-analysis.md)
+- [MCP server: stdio, Streamable HTTP, resources, and clients](docs/mcp.md)
 - [Production checklist](docs/production-checklist.md)
 - [Runtime integration patterns](docs/integrations.md)
 
@@ -55,6 +58,7 @@ LLM SDK / agent runtime
 - **Toolset** — hand an agent a scoped, async, structured-result bundle: `describe`/`get`/`find`/`search`/`patch`/`batchPatch`/`history`/`getAt`/`revert`. `batchPatch` applies `set`/`insert`/`remove`/`move`/`edit` atomically and rolls the whole batch back on failure. Writes are confined to `writeScope`, reads to `readScope`; errors are returned, never thrown across the boundary.
 - **Agent bridge** — 13 provider-neutral LLM tools with input + output JSON Schemas, `reader`/`editor`/`admin` profiles, optimistic `ifVersion`, atomic `batch_patch`, full semantic-search filters, operation-level guards, async approvals, and a never-throw executor. LangChain `bindTools` accepts the definitions as-is; Anthropic needs a one-line `input_schema` mapping.
 - **Native analysis** — deterministic vector clustering/quality/outlier metrics, structural hashes and shape similarity, graph algorithms, and seven read-only LLM tools. Verdict-free by design: thresholds and domain labels stay in the application.
+- **MCP server** — the separate `@arborkit/mcp` package exposes the same profiles, scopes, schemas, approvals, atomic mutations, history, and optional analysis tools over stdio or stateless Streamable HTTP. Artifact trees, subtrees, versions, history, and type metadata are standard MCP resources.
 - **AG-UI adapter** — expose the tree + log as [AG-UI](https://docs.ag-ui.com) shared-state events: `snapshotEvent` (STATE_SNAPSHOT) + `deltaSince` (STATE_DELTA with RFC 6902 JSON Patch ops). Zero-dep — plain objects shaped like AG-UI events, no AG-UI SDK required.
 - **Facade** — `createArbor`/`restoreArbor` wire all of the above in one call.
 
@@ -174,6 +178,8 @@ npm run example:research  # researchers and a synthesizer share one artifact
 npm run example:bridge    # provider-neutral LLM tool-call round-trip
 npm run example:analysis  # read -> analyze -> fix with vector + structural metrics
 npm run example:all       # run all four
+# MCP: copy examples/mcp/arborkit.mcp.mjs, then run:
+npx arborkit-mcp --config ./arborkit.mcp.mjs
 ```
 
 ## Develop
@@ -182,6 +188,9 @@ npm run example:all       # run all four
 npm test          # vitest
 npm run typecheck # tsc --noEmit
 npm run build     # tsup → dist/ (ESM + type declarations)
+npm run test:all      # core + @arborkit/mcp
+npm run typecheck:all # core + @arborkit/mcp
+npm run build:all     # core + @arborkit/mcp
 npm run bench     # micro-benchmarks (replay, navigation, glob find, vector search)
 npm run docs:api  # TypeDoc → docs/api/index.html
 ```
@@ -196,6 +205,7 @@ module in `src/` maps onto `arborkit/<module>`.
 - [Architecture](docs/architecture.md)
 - [Agent bridge](docs/agent-bridge.md)
 - [Native analysis](docs/native-analysis.md)
+- [MCP server](docs/mcp.md)
 - [Production checklist](docs/production-checklist.md)
 - [Runtime integrations](docs/integrations.md)
 - Full generated API reference: run `npm run docs:api`, then open
@@ -206,6 +216,6 @@ Historical design specs and implementation plans live in
 
 ## Status
 
-**v1.4 core complete through M21:** the original tree/mutation/index/storage/replay/toolset stack, the complete M20 agent bridge, and native verdict-free vector, structural, and graph analysis with a read-only LLM tool surface.
+**v1.5:** the original tree/mutation/index/storage/replay/toolset stack, the complete agent bridge, native verdict-free analysis, and the separate `@arborkit/mcp` package with stdio + stateless Streamable HTTP tools and resources.
 
-Deferred (post-v1): an MCP-server adapter over the toolset; DB-backed storage & vector adapters (SQLite/sqlite-vec, Postgres/pgvector); a CRDT backend.
+Deferred: DB-backed storage & vector adapters (SQLite/sqlite-vec, Postgres/pgvector), multi-artifact service mode, HTTP auth/rate limits, stateful MCP sessions, and a CRDT backend.
