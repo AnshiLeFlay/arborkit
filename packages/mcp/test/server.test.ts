@@ -4,7 +4,15 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { ErrorCode } from "@modelcontextprotocol/sdk/types.js";
-import { createArbor, SeqIdGen, sizeBasedDecision, TypeRegistry, type Arbor } from "arborkit";
+import {
+  createArbor,
+  MemoryDurableStore,
+  openDurableArbor,
+  SeqIdGen,
+  sizeBasedDecision,
+  TypeRegistry,
+  type Arbor,
+} from "arborkit";
 import { createArborMcpServer, startHttp } from "../src";
 
 async function linkedClient(options: Parameters<typeof createArborMcpServer>[0]) {
@@ -138,6 +146,45 @@ describe("ArborKit MCP tools", () => {
     } finally {
       await without.close();
       await withAnalysis.close();
+    }
+  });
+
+  it("commits durable mutations before returning and keeps tool schemas unchanged", async () => {
+    const store = new MemoryDurableStore();
+    const session = await openDurableArbor({
+      artifactId: "durable",
+      store,
+      config: { decomposition: { id: "size-based", version: "1" } },
+      arbor: {
+        initial: { public: { text: "old" } },
+        decompose: sizeBasedDecision(1),
+      },
+    });
+    const linked = await linkedClient({
+      session,
+      artifactId: "durable",
+      profile: "admin",
+      idempotencyKey: () => "mcp-request-1",
+    });
+    try {
+      const changed = await linked.client.callTool({
+        name: "set_value",
+        arguments: { path: "/public/text", value: "new" },
+      });
+      expect(changed.structuredContent).toMatchObject({ ok: true });
+      expect((await store.load("durable"))?.currentVersion).toBe(1);
+
+      const reused = await linked.client.callTool({
+        name: "set_value",
+        arguments: { path: "/public/text", value: "other" },
+      });
+      expect(reused.structuredContent).toMatchObject({
+        ok: false,
+        error: { code: "IDEMPOTENCY_CONFLICT" },
+      });
+      expect(session.arbor.tree.toJson()).toEqual({ public: { text: "new" } });
+    } finally {
+      await linked.close();
     }
   });
 });

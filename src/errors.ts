@@ -52,3 +52,46 @@ export class ValidationError extends ArborError {
     super("VALIDATION_ERROR", `Validation failed${type ? ` for type ${type}` : ""}: ${details}`);
   }
 }
+
+export class StaleArtifactError extends ArborError {
+  constructor(
+    public readonly artifactId: string,
+    public readonly expected: number,
+    public readonly actual: number,
+  ) {
+    super("STALE_ARTIFACT", `Stale artifact ${artifactId}: expected ${expected}, actual ${actual}`);
+  }
+}
+
+export class IdempotencyConflictError extends ArborError {
+  constructor(public readonly key: string) {
+    super("IDEMPOTENCY_CONFLICT", `Idempotency key ${JSON.stringify(key)} was already used for a different request`);
+  }
+}
+
+export class ConfigMismatchError extends ArborError {
+  constructor(
+    public readonly storedFingerprint: string,
+    public readonly expectedFingerprint: string,
+  ) {
+    super(
+      "CONFIG_MISMATCH",
+      `Artifact configuration mismatch: stored ${storedFingerprint}, expected ${expectedFingerprint}`,
+    );
+  }
+}
+
+export class MigrationRequiredError extends ArborError {
+  constructor(message = "Persistence schema migration is required") {
+    super("MIGRATION_REQUIRED", message);
+  }
+}
+
+export class VectorDimensionMismatchError extends ArborError {
+  constructor(
+    public readonly expected: number,
+    public readonly actual: number,
+  ) {
+    super("VECTOR_DIMENSION_MISMATCH", `Vector dimensions mismatch: expected ${expected}, actual ${actual}`);
+  }
+}

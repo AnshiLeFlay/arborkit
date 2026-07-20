@@ -3,7 +3,7 @@ import type { ArtifactTree } from "./artifact-tree";
 import type { Addressing } from "./addressing";
 import type { TypeRegistry } from "./type-registry";
 import type { EmbeddingPort } from "./embedding-port";
-import type { VectorIndexPort } from "./vector-index-port";
+import type { VectorIndexEntry, VectorIndexPort, VectorSearchFilter } from "./vector-index-port";
 import { toEmbeddingText, textHash } from "./embedding-text";
 import { isWithin } from "./jsonpointer";
 
@@ -170,6 +170,34 @@ export class SemanticIndex {
     return this.stale.size;
   }
 
+  /** Mark every currently-fresh semantic unit stale. Used when restoring into an
+   *  ephemeral or intentionally rebuilt vector index. */
+  invalidateFresh(): void {
+    for (const node of this.tree.allNodes()) {
+      if (node.meta.embedding.state === "fresh") {
+        node.meta.embedding = { state: "stale", textHash: node.meta.embedding.textHash };
+        this.stale.add(node.id);
+      }
+    }
+  }
+
+  /** Reconcile persisted node metadata with a durable vector backend. A missing
+   *  vector or mismatched text hash is safe: the node is queued for reindex. */
+  async reconcilePersistent(): Promise<void> {
+    if (!this.vectors.capabilities?.persistent || !this.vectors.metadata) {
+      this.invalidateFresh();
+      return;
+    }
+    const fresh = this.tree.allNodes().filter((node) => node.meta.embedding.state === "fresh");
+    const metadata = await this.vectors.metadata(fresh.map((node) => node.id));
+    for (const node of fresh) {
+      if (metadata.get(node.id)?.textHash !== node.meta.embedding.textHash) {
+        node.meta.embedding = { state: "stale", textHash: node.meta.embedding.textHash };
+        this.stale.add(node.id);
+      }
+    }
+  }
+
   /** Embed every stale node (one batch), upsert vectors, mark fresh, clear the processed ids.
    *  Interleave-safe: mutations landing during the embed await are respected — a node
    *  removed mid-flight is dropped (never resurrected), and a node whose text changed
@@ -212,7 +240,8 @@ export class SemanticIndex {
       const embedded = await this.embedding.embed(items.map((it) => it.text));
       // Mutations may have landed during the await — re-validate every item
       // against the live tree before trusting the embedded batch.
-      const upserts: { nodeId: NodeId; vector: number[] }[] = [];
+      const upserts: VectorIndexEntry[] = [];
+      const prepared = new Set<NodeId>();
       for (const [i, it] of items.entries()) {
         const node = this.tree.get(it.id);
         if (!node) {
@@ -234,11 +263,49 @@ export class SemanticIndex {
           if (node.meta.embedding.state === "none") completed.add(it.id);
           continue;
         }
-        upserts.push({ nodeId: it.id, vector: embedded[i] });
-        node.meta.embedding = { state: "fresh", textHash: it.hash };
-        completed.add(it.id);
+        const path = this.addressing.pathOf(it.id);
+        const scopePaths = [""];
+        if (path !== "") {
+          const segments = path.slice(1).split("/");
+          let scope = "";
+          for (const segment of segments) {
+            scope += `/${segment}`;
+            scopePaths.push(scope);
+          }
+        }
+        upserts.push({
+          nodeId: it.id,
+          vector: embedded[i],
+          metadata: {
+            path,
+            scopePaths,
+            ...(node.type !== undefined ? { type: node.type } : {}),
+            ...(node.tags !== undefined ? { tags: [...node.tags] } : {}),
+            textHash: it.hash,
+          },
+        });
+        prepared.add(it.id);
       }
-      if (upserts.length > 0) await this.vectors.upsert(upserts);
+      if (upserts.length > 0) {
+        await this.vectors.upsert(upserts);
+        // Only trust the completed remote write if the node still awaits the
+        // exact text that was embedded. A concurrent mutation remains stale.
+        for (const item of items) {
+          if (!prepared.has(item.id)) continue;
+          const node = this.tree.get(item.id);
+          if (!node) {
+            await this.vectors.remove(item.id);
+            completed.add(item.id);
+            continue;
+          }
+          const current = node.meta.embedding;
+          if (current.state === "stale" &&
+              (current.textHash === undefined || current.textHash === item.hash)) {
+            node.meta.embedding = { state: "fresh", textHash: item.hash };
+            completed.add(item.id);
+          }
+        }
+      }
     }
     for (const id of ids) {
       if (completed.has(id)) this.stale.delete(id);
@@ -259,7 +326,18 @@ export class SemanticIndex {
     if (opts.freshness === "wait") await this.reindex();
     const k = opts.k ?? 8;
     const [queryVec] = await this.embedding.embed([queryText]);
-    const ranked = await this.vectors.search(queryVec, await this.vectors.size());
+    const filter: VectorSearchFilter = {};
+    if (opts.under !== undefined) filter.under = opts.under;
+    if (opts.type !== undefined) filter.type = opts.type;
+    if (opts.tag !== undefined) filter.tag = opts.tag;
+    const requestedFilters = Object.keys(filter) as Array<keyof VectorSearchFilter>;
+    const nativeFilters = this.vectors.capabilities?.filters ?? [];
+    const canFilterNatively = requestedFilters.every((name) => nativeFilters.includes(name));
+    const ranked = await this.vectors.search(
+      queryVec,
+      canFilterNatively ? k : await this.vectors.size(),
+      canFilterNatively ? filter : undefined,
+    );
     const results: SearchHit[] = [];
     for (const hit of ranked) {
       if (results.length >= k) break;

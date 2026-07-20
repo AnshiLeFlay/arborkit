@@ -8,6 +8,7 @@ All examples run against the source tree with `tsx`; no model API key is needed.
 | `npm run example:research` | A shared research dossier | Multiple writers, a separately scoped synthesizer, structured scope failures, and audit history. |
 | `npm run example:bridge` | An LLM tool-call loop | Allowlisted definitions/executor, LangChain-compatible definitions, Anthropic mapping, and JSON tool results. |
 | `npm run example:analysis` | Structure discovery over a workspace | Vector collection, seeded clustering, outlier scores, similarity components, and structural grouping. |
+| `npm run example:persistence` | A durable SQLite session | Explicit migrations, commit-before-confirmation, and a transactional mutation through `DurableArborSession`. |
 
 Run the complete smoke sequence with:
 

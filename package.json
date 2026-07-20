@@ -1,6 +1,6 @@
 {
   "name": "arborkit",
-  "version": "1.5.0",
+  "version": "1.6.0-alpha.1",
   "description": "A versioned, searchable, analyzable JSON workspace for AI agents: scoped edits, semantic discovery, audit history, and time-travel.",
   "keywords": [
     "agents",
@@ -31,7 +31,11 @@
   "homepage": "https://github.com/AnshiLeFlay/arborkit#readme",
   "type": "module",
   "engines": {
-    "node": ">=20.6"
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "alpha"
   },
   "sideEffects": false,
   "main": "./dist/index.js",
@@ -154,6 +158,10 @@
       "types": "./dist/storage.d.ts",
       "import": "./dist/storage.js"
     },
+    "./durable": {
+      "types": "./dist/durable.d.ts",
+      "import": "./dist/durable.js"
+    },
     "./toolset": {
       "types": "./dist/toolset.d.ts",
       "import": "./dist/toolset.js"
@@ -203,21 +211,29 @@
     "example:research": "tsx examples/research-artifact.ts",
     "example:bridge": "tsx examples/runtime-bridge.ts",
     "example:analysis": "tsx examples/native-analysis.ts",
-    "example:all": "npm run example:content && npm run example:research && npm run example:bridge && npm run example:analysis",
+    "example:persistence": "tsx examples/persistence-sqlite.ts",
+    "example:all": "npm run example:content && npm run example:research && npm run example:bridge && npm run example:analysis && npm run example:persistence",
     "build:mcp": "npm run build --workspace @arborkit/mcp",
     "typecheck:mcp": "npm run typecheck --workspace @arborkit/mcp",
     "test:mcp": "npm run test --workspace @arborkit/mcp",
-    "build:all": "npm run build && npm run build:mcp",
-    "typecheck:all": "npm run typecheck && npm run typecheck:mcp",
-    "test:all": "npm test && npm run test:mcp"
+    "build:adapters": "npm run build --workspace @arborkit/sqlite && npm run build --workspace @arborkit/postgres && npm run build --workspace @arborkit/qdrant",
+    "typecheck:adapters": "npm run typecheck --workspace @arborkit/sqlite && npm run typecheck --workspace @arborkit/postgres && npm run typecheck --workspace @arborkit/qdrant",
+    "test:adapters": "npm run test --workspace @arborkit/sqlite && npm run test --workspace @arborkit/postgres && npm run test --workspace @arborkit/qdrant",
+    "pack:smoke": "node scripts/pack-smoke.mjs",
+    "build:all": "npm run build && npm run build:mcp && npm run build:adapters",
+    "typecheck:all": "npm run typecheck && npm run typecheck:mcp && npm run typecheck:adapters",
+    "test:all": "npm test && npm run test:mcp && npm run test:adapters"
   },
   "devDependencies": {
-    "@types/node": "^20.14.0",
+    "@types/node": "^22.0.0",
     "tsup": "^8.0.0",
     "tsx": "^4.19.0",
     "typedoc": "^0.28.0",
     "typescript": "^5.6.3",
-    "vitest": "^2.1.8",
+    "vitest": "^4.1.10",
     "zod": "^3.24.0"
+  },
+  "overrides": {
+    "esbuild": "^0.28.1"
   }
 }

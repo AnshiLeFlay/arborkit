@@ -1,0 +1,29 @@
+{
+  "name": "@arborkit/qdrant",
+  "version": "1.6.0-alpha.1",
+  "description": "Qdrant vector index adapter for ArborKit",
+  "license": "MIT",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "publishConfig": { "access": "public", "tag": "alpha" },
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+  "files": ["dist", "README.md", "LICENSE"],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "prepack": "npm run build"
+  },
+  "peerDependencies": { "arborkit": "1.6.0-alpha.1" },
+  "dependencies": { "@qdrant/js-client-rest": "^1.15.1" },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "arborkit": "file:../..",
+    "tsup": "^8.0.0",
+    "typescript": "^5.6.3",
+    "vitest": "^4.1.10"
+  }
+}

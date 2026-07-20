@@ -6,7 +6,7 @@ export default defineConfig({
   entry: ["src/*.ts"],
   format: ["esm"],
   platform: "node",
-  target: "node20",
+  target: "node22",
   dts: true,
   // Code splitting ON: without it every subpath entry bundles its OWN copies of
   // shared classes, so `instanceof` breaks across mixed root/subpath imports

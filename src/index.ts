@@ -21,6 +21,7 @@ export * from "./embedding-text";
 export * from "./semantic-index";
 export * from "./vector-index-port";
 export * from "./storage";
+export * from "./durable";
 export * from "./file-storage";
 export * from "./json-edit";
 export * from "./replay";

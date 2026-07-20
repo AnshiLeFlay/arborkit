@@ -1,12 +1,14 @@
 # Production checklist
 
-ArborKit v1 is an embedded single-process core. Complete this checklist before
+ArborKit is an embedded core. `StoragePort` and `DeltaStoragePort` remain
+single-writer application-managed persistence; `DurableArborSession` adds
+SQL-backed multi-process conflict detection. Complete this checklist before
 putting an artifact on a production path.
 
 ## State ownership
 
-- [ ] Exactly one process writes an artifact.
-- [ ] No two processes point `FileStorage` or `FileDeltaStorage` at the same files.
+- [ ] Exactly one process writes an artifact, unless every writer uses the same SQL `DurableStorePort`.
+- [ ] No two processes point `FileStorage`, `FileDeltaStorage`, or a SQLite file at the same artifact outside a durable session.
 - [ ] The application serializes concurrent write requests.
 - [ ] Every agent/toolset has a stable `owner` for audit events.
 - [ ] Writes which depend on a prior read pass the returned `meta.version` as `ifVersion`.
@@ -29,6 +31,10 @@ code that can access the tree or `Mutator` directly.
 
 ## Persistence and recovery
 
+- [ ] The SQL schema was migrated explicitly before opening writable sessions.
+- [ ] Every request retry reuses both `idempotencyKey` and the same `requestHash`.
+- [ ] Config identity covers decomposition, registry, and embedding model/dimensions.
+- [ ] `STALE_ARTIFACT`, `CONFIG_MISMATCH`, and `MIGRATION_REQUIRED` are surfaced and monitored.
 - [ ] A checkpoint cadence is defined and tested.
 - [ ] A `keepLast` policy bounds event-log growth, or unbounded history is intentional.
 - [ ] Restore is exercised against a copy of real artifacts.
@@ -60,7 +66,7 @@ code that can access the tree or `Mutator` directly.
 - [ ] stdio diagnostics go to stderr; stdout contains protocol messages only.
 - [ ] Streamable HTTP binds to loopback, or a reverse proxy supplies authentication and an explicit Host allowlist.
 - [ ] The application config factory restores the correct registry, decomposition, embeddings, and persistence adapters.
-- [ ] Only one MCP process writes a given artifact; stateless MCP sessions do not make ArborKit multi-writer safe.
+- [ ] Multiple MCP writers use `DurableArborSession`; plain `Arbor` configurations still have a single-writer requirement.
 
 ## Release gate
 
@@ -73,4 +79,5 @@ npm run docs:api
 npm run test:mcp
 npm run typecheck:mcp
 npm run build:mcp
+npm run pack:smoke
 ```

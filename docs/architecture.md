@@ -18,9 +18,12 @@ flowchart LR
   Semantic --> Vectors[VectorIndexPort]
   Analysis --> Vectors
   Analysis --> Tree
-  Tree --> Persistence[StoragePort or DeltaStoragePort]
+  Tree --> Persistence[StoragePort, DeltaStoragePort, or DurableStorePort]
   Log --> Persistence
   Vectors --> Persistence
+  Durable[DurableArborSession] --> Toolset
+  Durable --> Persistence
+  Durable --> PersistentVectors[Persistent vector index]
   Tree --> AGUI[AG-UI snapshot]
   Log --> AGUI[AG-UI delta]
 ```
@@ -39,7 +42,8 @@ flowchart LR
 | `agent-tools` | Exposes profiled, provider-neutral input/output schemas and a guarded, approval-aware executor. |
 | Native analysis | Computes deterministic vector, structural, and graph metrics without domain verdicts. |
 | `analyze-tools` | Exposes the read-only analysis surface using Agent Bridge profiles, schemas, guards, and result caps. |
-| Storage ports | Persist a full artifact or a checkpoint plus append-only journal. |
+| Storage ports | Persist a full artifact, a checkpoint plus journal, or a CAS-protected durable artifact. |
+| `DurableArborSession` | Serializes local mutations and confirms them only after durable CAS commit, with rollback and conflict reload. |
 
 ## Write sequence
 
@@ -51,6 +55,11 @@ flowchart LR
 6. A reversible event is appended with actor and timestamp.
 7. Affected semantic units become stale; embedding remains off the mutation path.
 8. Persistence happens when the application calls `save`, `saveDelta`, or `checkpoint`.
+
+For a durable session, steps 5–7 remain provisional until the SQL adapter commits
+the artifact version with compare-and-set. A failed commit restores the in-memory
+tree, log, and semantic queues. A cross-process conflict reloads the winning
+state and reports `STALE_ARTIFACT`.
 
 ## Important invariants
 

@@ -8,11 +8,13 @@ import {
   type AnalyzeToolName,
   type AnalyzeToolSurfaceOptions,
   type Arbor,
+  type DurableArborSession,
   type ToolApproval,
   type ToolGuard,
   type ToolResult,
   type ToolsetBinding,
 } from "arborkit";
+import { ArborError, durableRequestHash } from "arborkit";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import {
   CallToolRequestSchema,
@@ -47,7 +49,8 @@ export interface ArborMcpResourceOptions {
 }
 
 export interface ArborMcpServerOptions {
-  arbor: Arbor;
+  arbor?: Arbor;
+  session?: DurableArborSession;
   artifactId: string;
   binding?: ToolsetBinding;
   /** Safe by default: mutation tools require an explicit editor/admin profile. */
@@ -60,12 +63,20 @@ export interface ArborMcpServerOptions {
   analysis?: boolean | AnalyzeToolSurfaceOptions;
   resources?: ArborMcpResourceOptions;
   serverInfo?: { name?: string; version?: string };
+  /** Optional request-id mapping for durable idempotency. */
+  idempotencyKey?: (toolName: string, input: Record<string, unknown>) => string | undefined | Promise<string | undefined>;
 }
 
 export interface NormalizedArborMcpOptions extends ArborMcpServerOptions {
   artifactId: string;
   profile: AgentToolProfile;
   resources: Required<ArborMcpResourceOptions>;
+}
+
+function currentArbor(options: ArborMcpServerOptions): Arbor {
+  const arbor = options.session?.arbor ?? options.arbor;
+  if (!arbor) throw new TypeError("exactly one of arbor or session is required");
+  return arbor;
 }
 
 function requirePositiveInteger(value: number | undefined, fallback: number, name: string): number {
@@ -76,6 +87,9 @@ function requirePositiveInteger(value: number | undefined, fallback: number, nam
 
 /** URI authorities are case-insensitive, so the canonical MCP artifact id is lowercase. */
 export function normalizeArborMcpOptions(options: ArborMcpServerOptions): NormalizedArborMcpOptions {
+  if ((options.arbor === undefined) === (options.session === undefined)) {
+    throw new TypeError("exactly one of arbor or session is required");
+  }
   if (!/^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/.test(options.artifactId)) {
     throw new TypeError("artifactId must be a URL-safe identifier using letters, digits, '.', '_' or '-'");
   }
@@ -151,35 +165,19 @@ function jsonResource(uri: string, value: unknown, maxChars: number, hint: strin
 export function createArborMcpServer(input: ArborMcpServerOptions): Server {
   const options = normalizeArborMcpOptions(input);
   const baseUri = `arborkit://${options.artifactId}`;
-  const toolset = options.arbor.toolset(options.binding);
   const stateDefs = agentToolDefs({ profile: options.profile, include: options.include });
   const stateNames = new Set<string>(stateDefs.map((definition) => definition.name));
-  const executeState = makeToolExecutor(toolset, {
-    profile: options.profile,
-    include: options.include,
-    guard: options.guard,
-    approval: options.approval,
-    maxResultChars: options.maxResultChars,
-  });
 
   const analysisOptions = options.analysis === true ? {} : options.analysis || undefined;
   const analysisDefs = analysisOptions === undefined
     ? []
     : analyzeToolDefs({ profile: options.profile, include: analysisOptions.include });
   const analysisNames = new Set<string>(analysisDefs.map((definition) => definition.name));
-  const executeAnalysis = analysisOptions === undefined
-    ? undefined
-    : makeAnalyzeExecutor(options.arbor, {
-        profile: options.profile,
-        include: analysisOptions.include,
-        readScope: options.binding?.readScope,
-        maxResultChars: options.maxResultChars,
-      });
 
   const server = new Server(
     {
       name: options.serverInfo?.name ?? "arborkit-mcp",
-      version: options.serverInfo?.version ?? "1.5.0",
+      version: options.serverInfo?.version ?? "1.6.0-alpha.1",
     },
     {
       capabilities: { tools: {}, resources: {} },
@@ -204,8 +202,41 @@ export function createArborMcpServer(input: ArborMcpServerOptions): Server {
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const name = request.params.name;
     const args = request.params.arguments ?? {};
-    if (stateNames.has(name)) return executorResult(await executeState(name, args));
-    if (analysisNames.has(name) && executeAnalysis !== undefined) {
+    if (stateNames.has(name)) {
+      const execute = (arbor: Arbor) => makeToolExecutor(arbor.toolset(options.binding), {
+        profile: options.profile,
+        include: options.include,
+        guard: options.guard,
+        approval: options.approval,
+        maxResultChars: options.maxResultChars,
+      })(name, args);
+      if (options.session && WRITE_TOOLS.has(name as AgentToolName)) {
+        try {
+          const idempotencyKey = await options.idempotencyKey?.(name, args);
+          const requestHash = idempotencyKey === undefined
+            ? undefined
+            : durableRequestHash({ tool: name, input: args } as never);
+          const committed = await options.session.transact(
+            { idempotencyKey, requestHash },
+            async (arbor) => JSON.parse(await execute(arbor)) as Record<string, unknown>,
+          );
+          return executorResult(JSON.stringify(committed.value));
+        } catch (error) {
+          const result = error instanceof ArborError
+            ? { ok: false, error: { code: error.code, message: error.message } }
+            : { ok: false, error: { code: "EXECUTOR_ERROR", message: error instanceof Error ? error.message : String(error) } };
+          return executorResult(JSON.stringify(result));
+        }
+      }
+      return executorResult(await execute(currentArbor(options)));
+    }
+    if (analysisNames.has(name) && analysisOptions !== undefined) {
+      const executeAnalysis = makeAnalyzeExecutor(currentArbor(options), {
+        profile: options.profile,
+        include: analysisOptions.include,
+        readScope: options.binding?.readScope,
+        maxResultChars: options.maxResultChars,
+      });
       return executorResult(await executeAnalysis(name as AnalyzeToolName, args));
     }
     throw new McpError(ErrorCode.InvalidParams, `unknown tool ${name}`);
@@ -249,12 +280,14 @@ export function createArborMcpServer(input: ArborMcpServerOptions): Server {
     }
     const path = parsed.pathname;
     if (path === "/tree") {
+      const toolset = currentArbor(options).toolset(options.binding);
       const value = unwrap(
         await toolset.get({ path: options.binding?.readScope ?? "" }, { maxDepth: options.resources.maxDepth }),
       );
       return jsonResource(uri, value, options.resources.maxResultChars, "request a smaller node resource");
     }
     if (path === "/history") {
+      const toolset = currentArbor(options).toolset(options.binding);
       const value = unwrap(await toolset.history(undefined, { limit: options.resources.historyLimit }));
       return jsonResource(uri, value, options.resources.maxResultChars, "reduce resources.historyLimit");
     }
@@ -263,9 +296,9 @@ export function createArborMcpServer(input: ArborMcpServerOptions): Server {
         uri,
         {
           artifactId: options.artifactId,
-          version: options.arbor.log.length(),
-          historyBaseVersion: options.arbor.log.baseSeqValue(),
-          retainedEvents: options.arbor.log.entries().length,
+          version: currentArbor(options).log.length(),
+          historyBaseVersion: currentArbor(options).log.baseSeqValue(),
+          retainedEvents: currentArbor(options).log.entries().length,
         },
         options.resources.maxResultChars,
         "increase resources.maxResultChars",
@@ -274,7 +307,7 @@ export function createArborMcpServer(input: ArborMcpServerOptions): Server {
     if (path === "/types") {
       return jsonResource(
         uri,
-        { types: options.arbor.registry?.list() ?? [] },
+        { types: currentArbor(options).registry?.list() ?? [] },
         options.resources.maxResultChars,
         "reduce registered JSON Schema metadata",
       );
@@ -282,6 +315,7 @@ export function createArborMcpServer(input: ArborMcpServerOptions): Server {
 
     const nodeMatch = /^\/node\/([^/]+)$/.exec(path);
     if (nodeMatch) {
+      const toolset = currentArbor(options).toolset(options.binding);
       let id: string;
       try {
         id = decodeURIComponent(nodeMatch[1]);
@@ -297,6 +331,7 @@ export function createArborMcpServer(input: ArborMcpServerOptions): Server {
 
     const historyMatch = /^\/history\/([^/]+)$/.exec(path);
     if (historyMatch) {
+      const toolset = currentArbor(options).toolset(options.binding);
       let id: string;
       try {
         id = decodeURIComponent(historyMatch[1]);

@@ -32,6 +32,7 @@ export async function startStdio(options: ArborMcpServerOptions): Promise<Runnin
       if (closed) return;
       closed = true;
       await server.close();
+      await options.session?.close();
     },
   };
 }
@@ -108,6 +109,7 @@ export async function startHttp(
         await server.close().catch(() => undefined);
       }));
       active.clear();
+      await options.session?.close();
     },
   };
 }

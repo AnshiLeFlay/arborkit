@@ -30,11 +30,11 @@ describe("serializeArtifact", () => {
   it("dumps the live components into a versioned StoredArtifact", async () => {
     const { tree, log, vectors } = await build();
     const s = await serializeArtifact(tree, log, vectors);
-    expect(s.version).toBe(2);
+    expect(s.version).toBe(3);
     expect(s.rootId).toBe(tree.rootIdValue());
     expect(s.nodes.length).toBe(tree.size());
     expect(s.events.length).toBe(log.length());
-    expect(s.vectors.length).toBe(1);
+    expect(s.vectors!.length).toBe(1);
   });
 });
 
@@ -62,6 +62,6 @@ describe("MemoryStorage + restoreArtifact", () => {
     await store.save(await serializeArtifact(tree, log, vectors));
     await vectors.upsert([{ nodeId: "later", vector: [9, 9, 9] }]);
     const loaded = (await store.load())!;
-    expect(loaded.vectors.length).toBe(1);
+    expect(loaded.vectors!.length).toBe(1);
   });
 });

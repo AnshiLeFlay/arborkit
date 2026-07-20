@@ -3,17 +3,27 @@ import { ArtifactTree, type TreeDeps } from "./artifact-tree";
 import { EventLog, type MutationEvent } from "./event-log";
 import { guardIdGen } from "./ids";
 import type { VectorIndexPort, VectorIndexEntry } from "./vector-index-port";
+import type { ArtifactConfigIdentity } from "./durable";
 
 /** A JSON-serializable snapshot of an entire artifact: tree + event-log + vectors.
  *  v2 adds `baseSeq` (the event-log compaction floor); v1 files restore with floor 0. */
 export interface StoredArtifact {
-  version: 1 | 2;
+  version: 1 | 2 | 3;
   rootId: NodeId;
   nodes: ArbNode[];
   events: MutationEvent[];
   /** Absolute seq of the oldest retained event (compaction floor). Absent in v1 → 0. */
   baseSeq?: number;
-  vectors: VectorIndexEntry[];
+  /** Optional in v3: durable vector indexes are derivative and reconciled separately. */
+  vectors?: VectorIndexEntry[];
+  /** Human-readable runtime identity used by durable restore validation. */
+  config?: ArtifactConfigIdentity;
+}
+
+export interface SerializeArtifactOptions {
+  /** Legacy snapshots include vectors by default; durable checkpoints disable this. */
+  includeVectors?: boolean;
+  config?: ArtifactConfigIdentity;
 }
 
 /** Persists/loads a StoredArtifact. Adapters: MemoryStorage, FileStorage (and DB-backed later). */
@@ -27,15 +37,18 @@ export async function serializeArtifact(
   tree: ArtifactTree,
   log: EventLog,
   vectors: VectorIndexPort,
+  options: SerializeArtifactOptions = {},
 ): Promise<StoredArtifact> {
-  return {
-    version: 2,
+  const stored: StoredArtifact = {
+    version: 3,
     rootId: tree.rootIdValue(),
     nodes: tree.allNodes(),
     events: [...log.entries()],
     baseSeq: log.baseSeqValue(),
-    vectors: await vectors.entries(),
   };
+  if (options.includeVectors !== false) stored.vectors = await vectors.entries();
+  if (options.config !== undefined) stored.config = structuredClone(options.config);
+  return stored;
 }
 
 /** Rebuild a fresh tree + log from a StoredArtifact, and upsert its vectors into `vectors`.
@@ -54,7 +67,7 @@ export async function restoreArtifact(
   };
   const tree = ArtifactTree.fromStored(stored.nodes, stored.rootId, guardedDeps);
   const log = EventLog.fromStored(stored.events, stored.baseSeq ?? 0);
-  await vectors.upsert(stored.vectors);
+  await vectors.upsert(stored.vectors ?? []);
   return { tree, log };
 }
 

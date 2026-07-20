@@ -1,5 +1,30 @@
 # Changelog
 
+## 1.6.0-alpha.1 — 2026-07-18
+
+This entire release line is alpha software. APIs and SQL schemas may change
+between `1.6.0-alpha.N` releases; publish it with the npm `alpha` dist-tag, never
+`latest`, and back up important data before testing.
+
+- Added the zero-dependency `DurableStorePort`, `openDurableArbor`, and serialized
+  `DurableArborSession` with storage-level compare-and-set, rollback on failed
+  commits, conflict reload, idempotency keys, configuration fingerprints, and
+  durable checkpoints.
+- Added StoredArtifact v3 with optional vectors and backwards-compatible v1/v2
+  import. Persistent vector indexes are derivative and reconciled by text hash.
+- Added `@arborkit/sqlite` with explicit migrations, WAL, multi-artifact tables,
+  atomic checkpoints/events/idempotency, and a sqlite-vec adapter.
+- Added `@arborkit/postgres` with advisory-locked migrations, transactional CAS,
+  normalized multi-artifact storage, and filtered HNSW pgvector search.
+- Added `@arborkit/qdrant` with artifact namespaces, deterministic point ids,
+  payload indexes, filtered search, metadata reconciliation, and collection checks.
+- MCP configs may now return a durable session. Mutating tools acknowledge only
+  after the authoritative store commits; storage conflicts return `STALE_ARTIFACT`.
+- Raised the supported runtime to Node.js 22 and added Node 22/24 CI coverage.
+
+Chroma, service mode, auth, automatic lifecycle policies, and conflict merging
+remain outside this alpha.
+
 ## 1.5.0 — 2026-07-18
 
 - Added the separate `@arborkit/mcp` workspace package with a standard MCP server,

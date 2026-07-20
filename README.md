@@ -12,9 +12,14 @@ LangGraph, Mastra, an SDK tool loop, or your own orchestrator.
 npm install arborkit
 # Optional standard MCP server:
 npm install @arborkit/mcp
+# Alpha durable persistence:
+npm install arborkit@alpha @arborkit/sqlite@alpha
 ```
 
-ESM-only, Node ≥ 20.6.
+ESM-only, Node ≥ 22.
+
+> `1.6.0-alpha` is a test release. Its APIs and SQL schemas may change between
+> alpha builds. Use the npm `alpha` tag and back up important data.
 
 ## Is ArborKit a fit?
 
@@ -32,6 +37,7 @@ is deliberately single-process and single-writer.
 - [Agent bridge: tools, profiles, concurrency, and approvals](docs/agent-bridge.md)
 - [Native analysis: clusters, outliers, structure, and graphs](docs/native-analysis.md)
 - [MCP server: stdio, Streamable HTTP, resources, and clients](docs/mcp.md)
+- [Durable persistence: SQLite, PostgreSQL, pgvector, and Qdrant](docs/persistence.md)
 - [Production checklist](docs/production-checklist.md)
 - [Runtime integration patterns](docs/integrations.md)
 
@@ -54,6 +60,9 @@ LLM SDK / agent runtime
 - **Navigate** — `describe`/`get`/`find` (by id, path, tag, or glob) — depth-bounded and paginated; `find` returns `{hits, truncated}` so truncation is never silent.
 - **Semantic index** — per-node embeddings via pluggable `EmbeddingPort`/`VectorIndexPort` (async — DB-backed adapters welcome); `search` by meaning returns `{results, staleCount}`, off the mutation path (mutations only mark stale; an async reindexer embeds).
 - **Storage** — serialize the whole artifact (tree + log + vectors) to memory or a JSON file; or persist incrementally (checkpoint + appendable NDJSON journal); restore intact either way.
+- **Durable session (alpha)** — SQLite/PostgreSQL storage-level CAS, idempotency,
+  configuration fingerprints, atomic checkpoints, and commit-before-acknowledgement.
+  Pgvector, Qdrant, and sqlite-vec are rebuildable semantic indexes.
 - **Replay** — reconstruct any past version, `diff` two versions, `revert` a node (append-only, path-addressed).
 - **Toolset** — hand an agent a scoped, async, structured-result bundle: `describe`/`get`/`find`/`search`/`patch`/`batchPatch`/`history`/`getAt`/`revert`. `batchPatch` applies `set`/`insert`/`remove`/`move`/`edit` atomically and rolls the whole batch back on failure. Writes are confined to `writeScope`, reads to `readScope`; errors are returned, never thrown across the boundary.
 - **Agent bridge** — 13 provider-neutral LLM tools with input + output JSON Schemas, `reader`/`editor`/`admin` profiles, optimistic `ifVersion`, atomic `batch_patch`, full semantic-search filters, operation-level guards, async approvals, and a never-throw executor. LangChain `bindTools` accepts the definitions as-is; Anthropic needs a one-line `input_schema` mapping.
@@ -137,13 +146,15 @@ const past = restored!.replay.getAt("/pages/home", 0); // undefined — before t
 
 StoredArtifact **v1** files (written before compaction existed) still load; **v2**
 adds `baseSeq` (the persisted compaction floor). Delta storage keeps a checkpoint
-plus an NDJSON journal; a torn journal tail is isolated on restore.
+plus an NDJSON journal; a torn journal tail is isolated on restore. **v3** makes
+vectors optional for durable stores and can carry configuration identity metadata.
 
 ## Scope & limits (read this before adopting)
 
-- **Single process, single writer.** The tree lives in memory; storage is a snapshot
-  target, not a database. There is no locking — two processes sharing one artifact
-  file will clobber each other. One artifact = one run = one process.
+- **Legacy storage remains single-writer.** `StoragePort`, `DeltaStoragePort`, and
+  JSON/NDJSON files have no cross-process locking. Use `DurableArborSession` with
+  SQLite or PostgreSQL for storage-level CAS. Concurrent writers are rejected and
+  reloaded; changes are not automatically merged.
 - **Scoping is a guardrail, not a security boundary.** `writeScope`/`readScope`
   contain an agent's *tool calls* (including prompt-injected ones — a writer scoped
   to `/pages/home` has no path to `/secret`). They do NOT isolate *code*: every
@@ -190,7 +201,8 @@ npm run typecheck # tsc --noEmit
 npm run build     # tsup → dist/ (ESM + type declarations)
 npm run test:all      # core + @arborkit/mcp
 npm run typecheck:all # core + @arborkit/mcp
-npm run build:all     # core + @arborkit/mcp
+npm run build:all     # core + MCP + persistence/vector adapters
+npm run pack:smoke    # pack and clean-install all five published packages
 npm run bench     # micro-benchmarks (replay, navigation, glob find, vector search)
 npm run docs:api  # TypeDoc → docs/api/index.html
 ```
@@ -206,6 +218,7 @@ module in `src/` maps onto `arborkit/<module>`.
 - [Agent bridge](docs/agent-bridge.md)
 - [Native analysis](docs/native-analysis.md)
 - [MCP server](docs/mcp.md)
+- [Durable persistence](docs/persistence.md)
 - [Production checklist](docs/production-checklist.md)
 - [Runtime integrations](docs/integrations.md)
 - Full generated API reference: run `npm run docs:api`, then open
@@ -216,6 +229,7 @@ Historical design specs and implementation plans live in
 
 ## Status
 
-**v1.5:** the original tree/mutation/index/storage/replay/toolset stack, the complete agent bridge, native verdict-free analysis, and the separate `@arborkit/mcp` package with stdio + stateless Streamable HTTP tools and resources.
+**v1.6.0-alpha.1:** test release of durable SQLite/PostgreSQL persistence,
+pgvector/Qdrant/sqlite-vec indexes, and commit-aware MCP, on top of the v1.5 stack.
 
 Deferred: DB-backed storage & vector adapters (SQLite/sqlite-vec, Postgres/pgvector), multi-artifact service mode, HTTP auth/rate limits, stateful MCP sessions, and a CRDT backend.

@@ -26,7 +26,7 @@ describe("M12 storage preserves the compaction floor", () => {
     await rm(join(dir, "a.json"), { force: true });
   });
 
-  it("serialize writes version 2 + baseSeq; restore preserves the floor", async () => {
+  it("serialize writes version 3 + baseSeq; restore preserves the floor", async () => {
     const tree = ArtifactTree.fromJson({ docs: {} }, freshDeps());
     const addressing = new Addressing(tree);
     const log = new EventLog();
@@ -36,7 +36,7 @@ describe("M12 storage preserves the compaction floor", () => {
     log.compactTo(1);
 
     const dumped = await serializeArtifact(tree, log, new MemoryVectorIndex());
-    expect(dumped.version).toBe(2);
+    expect(dumped.version).toBe(3);
     expect(dumped.baseSeq).toBe(1);
     expect(dumped.events.map((e) => e.seq)).toEqual([1]); // only the retained window
 
@@ -60,7 +60,7 @@ describe("M12 storage preserves the compaction floor", () => {
     expect(log.baseSeqValue()).toBe(0);
   });
 
-  it("FileStorage round-trips a compacted (v2) artifact", async () => {
+  it("FileStorage round-trips a compacted v3 artifact", async () => {
     const tree = ArtifactTree.fromJson({ a: "x" }, freshDeps());
     const log = new EventLog();
     const dumped = await serializeArtifact(tree, log, new MemoryVectorIndex());
@@ -68,6 +68,6 @@ describe("M12 storage preserves the compaction floor", () => {
     await store.save(dumped);
     const loaded = await store.load();
     expect(loaded).toEqual(dumped);
-    expect(loaded!.version).toBe(2);
+    expect(loaded!.version).toBe(3);
   });
 });

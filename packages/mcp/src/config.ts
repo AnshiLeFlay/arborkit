@@ -1,8 +1,8 @@
-import type { Arbor } from "arborkit";
+import type { Arbor, DurableArborSession } from "arborkit";
 import type { ArborMcpServerOptions } from "./server";
 
-export interface ArborMcpConfig extends Omit<ArborMcpServerOptions, "arbor"> {
-  createArbor(): Arbor | Promise<Arbor>;
+export interface ArborMcpConfig extends Omit<ArborMcpServerOptions, "arbor" | "session"> {
+  createArbor(): Arbor | DurableArborSession | Promise<Arbor | DurableArborSession>;
 }
 
 export function defineArborMcpConfig<T extends ArborMcpConfig>(config: T): T {
@@ -11,5 +11,8 @@ export function defineArborMcpConfig<T extends ArborMcpConfig>(config: T): T {
 
 export async function resolveArborMcpConfig(config: ArborMcpConfig): Promise<ArborMcpServerOptions> {
   const { createArbor, ...options } = config;
-  return { ...options, arbor: await createArbor() };
+  const value = await createArbor();
+  return value instanceof Object && "kind" in value && value.kind === "durable-arbor-session"
+    ? { ...options, session: value as DurableArborSession }
+    : { ...options, arbor: value as Arbor };
 }
